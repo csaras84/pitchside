@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pitchside: accessible match intelligence</title>
+<style>
+  :root {
+    --bg: #0f1720; --fg: #f2f5f8; --muted: #b8c4d0; --card: #1a2633; --accent: #ffd23f;
+    --ok: #5bd48a; --bad: #ff8a80; --border: #3a4b5d; --fs: 18px;
+  }
+  body.contrast { --bg: #000; --fg: #fff; --muted: #fff; --card: #000; --accent: #ffff00; --border: #fff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: var(--fs)/1.55 system-ui, sans-serif; }
+  .skip { position: absolute; left: -999px; }
+  .skip:focus { left: 8px; top: 8px; background: var(--accent); color: #000; padding: 8px 12px; z-index: 10; }
+  header, main { max-width: 56rem; margin: 0 auto; padding: 1rem; }
+  h1 { margin: 0 0 .25rem; font-size: 1.6rem; }
+  h2 { font-size: 1.2rem; margin: 0 0 .5rem; }
+  .sub { color: var(--muted); margin: 0; }
+  fieldset, section, details { background: var(--card); border: 2px solid var(--border); border-radius: 10px; padding: 1rem; margin: 0 0 1rem; }
+  legend { padding: 0 .4rem; font-weight: 600; }
+  label { margin-right: 1rem; display: inline-block; }
+  select, button { font: inherit; color: var(--fg); background: var(--bg); border: 2px solid var(--border); border-radius: 8px; padding: .4rem .8rem; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 700; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .score { font-size: 2rem; font-weight: 700; }
+  ol { list-style: none; padding: 0; margin: 0; }
+  li { padding: .6rem .4rem; border-bottom: 1px solid var(--border); white-space: pre-line; }
+  li.goal { border-left: 6px solid var(--accent); padding-left: .8rem; font-weight: 600; }
+  li.current { background: rgba(255, 210, 63, .15); }
+  .cue { color: var(--accent); }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid var(--border); padding: .3rem .5rem; text-align: left; }
+  .bar { display: inline-block; height: .9em; background: var(--accent); vertical-align: middle; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  #flash { position: fixed; inset: 0; background: var(--accent); opacity: 0; pointer-events: none; transition: opacity .6s; }
+  #flash.on { opacity: .35; }
+  @media (prefers-reduced-motion: reduce) { #flash { transition: none; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#timeline">Skip to match timeline</a>
+<div id="flash" aria-hidden="true"></div>
+<header>
+  <h1>Pitchside</h1>
+  <p class="sub">Synthetic match, verified by agents, adapted for how you follow football.</p>
+</header>
+<main>
+  <fieldset>
+    <legend>How do you follow the match?</legend>
+    <label><input type="radio" name="profile" value="standard" checked> Standard</label>
+    <label><input type="radio" name="profile" value="deaf"> Deaf or hard of hearing</label>
+    <label><input type="radio" name="profile" value="blind"> Blind or low vision</label>
+    <label><input type="radio" name="profile" value="deafblind"> Deafblind (braille display)</label>
+    <p>
+      <label for="lang">Language</label>
+      <select id="lang">
+        <option value="en">English</option><option value="es">Español</option>
+        <option value="fr">Français</option><option value="hi">हिन्दी</option><option value="ta">தமிழ்</option>
+      </select>
+      <label for="seed">Match</label>
+      <select id="seed"><option value="7">Match 7</option><option value="11">Match 11</option><option value="23">Match 23</option></select>
+    </p>
+    <p>
+      <button id="load" class="primary">Load recap</button>
+      <button id="play" disabled>Play match live</button>
+      <button id="contrast" aria-pressed="false">High contrast</button>
+      <button id="bigger">Larger text</button>
+    </p>
+  </fieldset>
+
+  <section aria-labelledby="score-h">
+    <h2 id="score-h">Score</h2>
+    <p class="score" id="score">Load a recap to begin</p>
+    <p class="sub" id="status" role="status"></p>
+  </section>
+
+  <section aria-labelledby="tl-h" id="timeline">
+    <h2 id="tl-h">Match timeline</h2>
+    <p class="sub" id="notes"></p>
+    <ol id="items" aria-label="Match events"></ol>
+    <div id="live" aria-live="polite" class="sub"></div>
+  </section>
+
+  <section aria-labelledby="mom-h">
+    <h2 id="mom-h">Momentum by 15-minute window</h2>
+    <table>
+      <caption class="sub">Attacking threat score per team; the leader is stated in words.</caption>
+      <thead><tr><th scope="col">Minutes</th><th scope="col">Home</th><th scope="col">Away</th><th scope="col">Leader</th></tr></thead>
+      <tbody id="momentum"></tbody>
+    </table>
+  </section>
+
+  <details>
+    <summary>How was this verified? (agent trace)</summary>
+    <p id="verdict"></p>
+    <table>
+      <thead><tr><th scope="col">Agent</th><th scope="col">Action</th><th scope="col">Status</th><th scope="col">ms</th></tr></thead>
+      <tbody id="trace"></tbody>
+    </table>
+  </details>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let data = null, timer = null, audioCtx = null;
+
+const profile = () => document.querySelector('input[name="profile"]:checked').value;
+const LOCALES = { en: 'en-GB', es: 'es-ES', fr: 'fr-FR', hi: 'hi-IN', ta: 'ta-IN' };
+
+function cell(tag, text) { const el = document.createElement(tag); el.textContent = text; return el; }
+function row(values) { const tr = document.createElement('tr'); values.forEach(v => tr.append(cell('td', v))); return tr; }
+
+function render() {
+  if (!data) return;
+  const recap = data.recaps[profile()];
+  const [h, a] = data.analysis.final_score.split('-');
+  $('score').textContent = `${data.match.home} ${h}, ${data.match.away} ${a}`;
+  $('status').textContent = data.language !== 'en' && !data.translated
+    ? 'Translation service not configured: showing English.' : '';
+  $('notes').textContent = recap.notes.join(' ');
+  const list = $('items'); list.replaceChildren();
+  recap.items.forEach((item, i) => {
+    const li = document.createElement('li');
+    li.dataset.index = i;
+    if (item.sound_cue && item.sound_cue.includes('erupts')) li.classList.add('goal');
+    if (item.event_id !== null && item.minute !== null && /goal|scores|Goal|GOAL/i.test(item.text)) li.classList.add('goal');
+    li.textContent = item.text;
+    list.append(li);
+  });
+  $('momentum').replaceChildren(...data.analysis.momentum.map(m => row([m.window, m.home, m.away, m.leader === 'even' ? 'Even' : m.leader])));
+  $('verdict').textContent = data.verification.passed
+    ? `Verified: ${data.verification.checked} statements checked against the raw event data, 0 issues. Narrator source: ${data.narrative.source}.`
+    : 'Verification failed.';
+  $('trace').replaceChildren(...data.trace.map(t => row([t.agent, t.action, t.status, t.ms])));
+  $('play').disabled = false;
+}
+
+async function load() {
+  $('status').textContent = 'Loading…';
+  try {
+    const r = await fetch(`/api/recap?seed=${$('seed').value}&language=${$('lang').value}`);
+    if (!r.ok) throw new Error(r.statusText);
+    data = await r.json(); render();
+  } catch (e) { $('status').textContent = 'Could not load the recap: ' + e.message; }
+}
+
+function tone(hz) {
+  try {
+    audioCtx = audioCtx || new AudioContext();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.frequency.value = hz; g.gain.value = 0.08;
+    o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + 0.25);
+  } catch (_) { /* audio is optional */ }
+}
+
+function announce(item, li) {
+  document.querySelectorAll('li.current').forEach(n => n.classList.remove('current'));
+  li.classList.add('current'); li.scrollIntoView({ block: 'nearest' });
+  $('live').textContent = item.text;               // screen readers announce via aria-live
+  const p = profile();
+  if ((p === 'deaf' || p === 'deafblind') && item.haptic && navigator.vibrate) navigator.vibrate(item.haptic);
+  if ((p === 'deaf') && item.sound_cue && item.sound_cue.includes('erupts')) {
+    $('flash').classList.add('on'); setTimeout(() => $('flash').classList.remove('on'), 700);
+  }
+  if (p === 'blind') {
+    if (item.tone_hz) tone(item.tone_hz);
+    if ('speechSynthesis' in window) {          // placeholder for Azure AI Speech (see item.ssml)
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(item.text); u.lang = LOCALES[data.language] || 'en-GB'; speechSynthesis.speak(u);
+    }
+  }
+}
+
+function play() {
+  if (!data) return;
+  if (timer) { clearInterval(timer); timer = null; $('play').textContent = 'Play match live'; return; }
+  const items = data.recaps[profile()].items, nodes = $('items').children;
+  let i = 0; $('play').textContent = 'Stop';
+  timer = setInterval(() => {
+    if (i >= items.length) { clearInterval(timer); timer = null; $('play').textContent = 'Play match live'; return; }
+    announce(items[i], nodes[i]); i++;
+  }, 3500);
+}
+
+$('load').addEventListener('click', load);
+$('play').addEventListener('click', play);
+document.querySelectorAll('input[name="profile"]').forEach(r => r.addEventListener('change', render));
+$('contrast').addEventListener('click', (e) => {
+  const on = document.body.classList.toggle('contrast'); e.target.setAttribute('aria-pressed', on);
+});
+let fs = 18;
+$('bigger').addEventListener('click', () => { fs = fs >= 26 ? 18 : fs + 4; document.documentElement.style.setProperty('--fs', fs + 'px'); });
+</script>
+</body>
+</html>
