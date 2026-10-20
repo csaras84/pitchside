@@ -10,16 +10,16 @@ and the UI can show *how* a recap was produced.
 from __future__ import annotations
 
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 from pydantic import BaseModel, Field
 
 from .agents.accessibility import (
     AccessibleRecap,
     Profile,
-    add_ssml,
     adapt,
+    add_ssml,
 )
 from .agents.analyst import Analysis, analyse
 from .agents.narrator import Narrator, template_narrative
@@ -93,7 +93,7 @@ class Orchestrator:
             try:
                 with self._span(trace, "narrator", f"draft #{attempt}"):
                     draft = self.narrator.narrate(match, analysis, feedback)
-            except Exception as exc:  # LLM outage, bad JSON, ...: recover, don't crash
+            except Exception as exc:  # noqa: BLE001  LLM outage, bad JSON, ...: recover, don't crash
                 feedback = [f"previous attempt failed: {exc}"]
                 continue
             with self._span(trace, "verifier", f"check draft #{attempt}") as entry:
