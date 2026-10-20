@@ -130,3 +130,11 @@ then the agent trace showing the Verifier rejecting a wrong draft and accepting 
 - Gotcha: PowerShell blocked `Activate.ps1`. Calling `.venv\Scripts\python -m ...` directly avoids activation.
 - Still unverified: the UI in a real browser, screen reader testing, any real Azure call.
 - Next: run the app locally and click through all four profiles.
+
+### Oct 20, 22:31: registered and pushed to GitHub
+- Registered for the hackathon (before the Oct 21, 12:30 AM IST cutoff).
+- Ran the app locally on the real machine: page, `/api/recap` and the full agent pipeline all returned 200 with no errors.
+- Pushed the initial scaffold to https://github.com/csaras84/pitchside (public).
+- Gotchas: GitHub rejected the first push ("Repository not found") until the repo was created under the same account that signed in; stale Windows credentials were also a risk.
+- Not yet checked: whether the GitHub Actions CI run is green (it runs `ruff check .`, which has never been run on this code).
+- Next: check the CI result, confirm the repo is visible while signed out, then set up Azure and Foundry.
