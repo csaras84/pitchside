@@ -28,11 +28,11 @@ flowchart LR
 | Agent | Role | Technology |
 |---|---|---|
 | Analyst | Score, xG, momentum windows, key moments (deterministic, so numbers never come from an LLM) | Python |
-| Narrator | Writes the recap; every sentence carries structured `claims` | Microsoft Foundry (Azure OpenAI-compatible deployment) |
+| Narrator | Writes the recap; every sentence carries structured `claims` | Microsoft Foundry deployment (`gpt-4.1-mini`), run as a Microsoft Agent Framework `Agent` in the workflow engine |
 | Verifier | Checks each claim (minute, player, team, score) against raw events; rejects and returns issues | Python |
 | Accessibility Adapter | Renders one verified story per profile: sound cues, plain language, spatial description, haptics, SSML, 40-cell braille text | Python, Azure AI Speech SSML |
 | Translator | English, Spanish, French, Hindi, Tamil | Azure AI Translator |
-| Orchestrator | Shared state, handoffs, retry with feedback, fallback, per-step trace | Python |
+| Orchestrator | Shared state, handoffs, retry with feedback, fallback, per-step trace | Plain Python, or a Microsoft Agent Framework workflow (see below) |
 
 **Failure recovery:** if the LLM returns bad JSON, is down, or states something the Verifier rejects,
 the Narrator is retried with the Verifier's issues. After `max_attempts` the deterministic narrator
@@ -41,17 +41,51 @@ takes over, so a recap is always produced and always verified. Every step is tra
 **Offline by default:** with no credentials the whole app runs on deterministic template agents.
 Set the variables in `.env.example` to switch on Foundry and Translator.
 
+## Two engines, one set of steps
+
+The pipeline steps live in `pipeline_steps.py`. Two engines run them, so both behave the same:
+
+* **Plain Python** (`orchestrator.py`), the default.
+* **Microsoft Agent Framework workflow** (`af_workflow.py`), opt-in with `?engine=agent_framework`
+  on `/api/recap`. Each role is a workflow executor, the Narrator is a framework `Agent` backed by
+  the Foundry deployment, and the Verifier routes with conditional edges:
+
+```mermaid
+flowchart LR
+    A[analyst] --> N1[narrator_1] --> V1{verifier_1}
+    V1 -- verified --> X[adapt + translate]
+    V1 -- rejected --> N2[narrator_2] --> V2{verifier_2}
+    V2 -- verified --> X
+    V2 -- rejected --> N3[narrator_3] --> V3{verifier_3}
+    V3 -- verified --> X
+    V3 -- rejected --> F[deterministic fallback] --> X
+    N1 & N2 & N3 -. model error .-> F
+    X --> R[result + trace]
+```
+
+Retry attempts are unrolled into separate nodes rather than a loop-back edge. If every attempt is
+rejected or the model is unavailable, the deterministic narrator takes over, so a verified recap is
+always produced.
+
 ## Run it
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -e ".[dev,agent]"                          # "agent" adds Microsoft Agent Framework
 pytest -q
-uvicorn pitchside.api:app --reload      # open http://127.0.0.1:8000
+uvicorn pitchside.api:app --reload --env-file .env     # open http://127.0.0.1:8000
 ```
 
-Optional Azure config: copy `.env.example` to `.env`, fill it in, and export the variables
-(for example `set -a; source .env; set +a`).
+The app runs without any keys. To use Microsoft Foundry, copy `.env.example` to `.env` and fill in
+the endpoint, key and **deployment name**, then check the connection:
+
+```bash
+python scripts/check_foundry.py          # one small request to your deployment
+python scripts/try_llm.py                # plain engine with the real model
+python scripts/try_agent_framework.py    # workflow engine with the real model
+```
+
+Try the workflow engine through the API: `/api/recap?engine=agent_framework`.
 
 ## Accessibility features
 
@@ -74,7 +108,7 @@ run Accessibility Insights and try it with NVDA or VoiceOver.
 
 ## Roadmap / known gaps
 
-- Port the orchestration onto **Microsoft Agent Framework** (agents here are plain Python classes with clear interfaces)
+- Show the engine choice and each workflow step in the UI (today the engine is selected through the API)
 - Use **Azure AI Speech** for real audio (SSML is already generated; the UI currently uses browser speech)
 - Host on **Azure Container Apps**; add Cosmos DB or Fabric for match data and state
 - Add Foundry evaluations for narration quality and a live event stream (the demo plays a finished match)
