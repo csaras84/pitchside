@@ -20,9 +20,9 @@ for raw in (ROOT / ".env").read_text(encoding="utf-8").splitlines():
         k, v = line.split("=", 1)
         os.environ[k.strip()] = v.strip().strip('"').strip("'")
 
-from pitchside.agents.narrator import Narrator  # noqa: E402
-from pitchside.llm import LLMClient  # noqa: E402
-from pitchside.orchestrator import Orchestrator  # noqa: E402
+from pitchside.agents.narrator import Narrator
+from pitchside.llm import LLMClient
+from pitchside.orchestrator import Orchestrator
 
 
 def main() -> int:

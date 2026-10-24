@@ -13,7 +13,6 @@ from pydantic import BaseModel
 
 from ..models import Match, Narrative
 
-
 _DASHES = str.maketrans({"\u2013": "-", "\u2014": "-", "\u2212": "-", "\u2010": "-", "\u2011": "-"})
 
 
@@ -30,6 +29,20 @@ def mentions_score(text: str, score: str) -> bool:
     home, away = score.split("-")
     cleaned = text.translate(_DASHES)
     return re.search(rf"(?<!\d){home}\s*-\s*{away}(?!\d)", cleaned) is not None
+
+
+def states_final_score(text: str, home: str, away: str, home_goals: int, away_goals: int) -> bool:
+    """True only if the text gives the final score with the goals attached to the right teams.
+
+    Accepts '0-2' (home first, any dash style) or 'Home 0, Away 2' naming both teams.
+    Digits merely appearing somewhere ('Northgate won 2-0') do not count.
+    """
+    if mentions_score(text, f"{home_goals}-{away_goals}"):
+        return True
+    pattern = (
+        rf"{re.escape(home)}\W+{home_goals}(?!\d).*{re.escape(away)}\W+{away_goals}(?!\d)"
+    )
+    return re.search(pattern, text, re.DOTALL) is not None
 
 
 class Issue(BaseModel):
@@ -71,7 +84,7 @@ def verify(match: Match, narrative: Narrative) -> Verification:
             if s.claims["final_score"] != expected:
                 flag(i, "final_score", expected, s.claims["final_score"],
                      f"final score is {expected}, not {s.claims['final_score']}")
-            if f"{h}" not in s.text or f"{a}" not in s.text:
+            if not states_final_score(s.text, match.home, match.away, h, a):
                 flag(i, "text", expected, s.text, "text does not state the final score")
 
         for event_id in s.event_ids:

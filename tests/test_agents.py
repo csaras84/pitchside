@@ -132,3 +132,21 @@ def test_wording_tolerance_does_not_accept_wrong_facts():
     assert mentions_score("it is 0 \u2013 1", "0-1")
     assert not mentions_score("it is 1-0", "0-1")
     assert not mentions_score("it is 10-1", "0-1")
+
+
+def test_final_score_must_attach_goals_to_the_right_teams():
+    match = generate_match(7)
+    h, a = match.score_after()
+    narrative = template_narrative(match, analyse(match))
+    assert verify(match, narrative).passed  # the template wording is accepted
+    last = len(narrative.statements) - 1
+    claims = narrative.statements[last].claims
+
+    def with_text(text):
+        narrative.statements[last] = Statement(text=text, claims=claims)
+        return verify(match, narrative).passed
+
+    assert with_text(f"{match.home} {h}-{a} {match.away}.")
+    assert not with_text(f"{match.away} won {a}-{h}.")  # winner-first order is not our format
+    assert not with_text(f"{match.home} won {max(h, a)}-{min(h, a)}.")  # right digits, wrong winner
+    assert not with_text("The match ended.")

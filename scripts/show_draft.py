@@ -18,11 +18,11 @@ for raw in (ROOT / ".env").read_text(encoding="utf-8").splitlines():
         k, v = line.split("=", 1)
         os.environ[k.strip()] = v.strip().strip('"').strip("'")
 
-from pitchside.agents.analyst import analyse  # noqa: E402
-from pitchside.agents.narrator import Narrator  # noqa: E402
-from pitchside.agents.verifier import verify  # noqa: E402
-from pitchside.data.generator import generate_match  # noqa: E402
-from pitchside.llm import LLMClient  # noqa: E402
+from pitchside.agents.analyst import analyse
+from pitchside.agents.narrator import Narrator
+from pitchside.agents.verifier import verify
+from pitchside.data.generator import generate_match
+from pitchside.llm import LLMClient
 
 
 def main() -> int:
