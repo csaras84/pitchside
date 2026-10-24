@@ -138,3 +138,15 @@ then the agent trace showing the Verifier rejecting a wrong draft and accepting 
 - Gotchas: GitHub rejected the first push ("Repository not found") until the repo was created under the same account that signed in; stale Windows credentials were also a risk.
 - Not yet checked: whether the GitHub Actions CI run is green (it runs `ruff check .`, which has never been run on this code).
 - Next: check the CI result, confirm the repo is visible while signed out, then set up Azure and Foundry.
+
+### Oct 20, 22:44: CI green
+- First CI run failed at `ruff check .` (3 issues in `orchestrator.py`: import order, `collections.abc` import, and a deliberate broad `except` that now carries a `noqa: BLE001`). Fixed and pushed; CI is green (lint + 18 tests on Ubuntu, Python 3.12).
+- Status at end of day: registered, app runs locally, 18/18 tests, public repo on GitHub, CI green.
+- Next (Oct 21): confirm the repo is public while signed out, check email for the Innovation Studio invitation, create Azure subscription and a Foundry project, connect the Narrator to a real model and watch the Verifier on real output.
+
+### Oct 24, 21:15: momentum table replaced with an adaptive analysis section
+- Replaced the momentum table with a mirrored bar chart (home bars left, away bars right, stronger side outlined, away bars striped so colour is not the only cue), plus a one-sentence written summary.
+- Decision: analytics are for **every** profile, in the form that suits each: Standard and Deaf get chart + summary + table; Blind gets summary + table (chart is visual only); Deafblind gets the summary only, wrapped to 40 characters. Rejected hiding analytics for some profiles: it would hide the core "explainable" feature and withhold insight from the users the project is for.
+- Decision: deafblind stays (already built, near-zero cost). Claim "braille-ready text format" only; it has not been tested on a real braille display.
+- Verified: headless Chromium run with real pipeline output, all four profiles, no page errors; JS syntax check passes. Not verified on a real screen reader.
+- Still open: Foundry connection (not started), Agent Framework port, Azure deployment, demo video. Working deadline Oct 27 evening IST.

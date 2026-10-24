@@ -7,9 +7,9 @@
 <style>
   :root {
     --bg: #0f1720; --fg: #f2f5f8; --muted: #b8c4d0; --card: #1a2633; --accent: #ffd23f;
-    --ok: #5bd48a; --bad: #ff8a80; --border: #3a4b5d; --fs: 18px;
+    --accent2: #6ec1ff; --ok: #5bd48a; --bad: #ff8a80; --border: #3a4b5d; --fs: 18px;
   }
-  body.contrast { --bg: #000; --fg: #fff; --muted: #fff; --card: #000; --accent: #ffff00; --border: #fff; }
+  body.contrast { --bg: #000; --fg: #fff; --muted: #fff; --card: #000; --accent: #ffff00; --accent2: #00ffff; --border: #fff; }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg); font: var(--fs)/1.55 system-ui, sans-serif; }
   .skip { position: absolute; left: -999px; }
@@ -35,6 +35,20 @@
   th, td { border: 1px solid var(--border); padding: .3rem .5rem; text-align: left; }
   .bar { display: inline-block; height: .9em; background: var(--accent); vertical-align: middle; }
   .ok { color: var(--ok); } .bad { color: var(--bad); }
+  [hidden] { display: none !important; }
+  .mom { margin: .5rem 0; }
+  .mom-row { display: grid; grid-template-columns: 1fr 5rem 1fr; align-items: center; gap: .5rem; padding: .2rem 0; }
+  .mom-head { font-weight: 600; border-bottom: 2px solid var(--border); }
+  .mom-head span:first-child { text-align: right; }
+  .mom-head span:nth-child(2) { text-align: center; }
+  .mom-mid { text-align: center; color: var(--muted); font-size: .9em; }
+  .mom-side { display: flex; align-items: center; gap: .4rem; min-width: 0; }
+  .mom-side.home { justify-content: flex-end; }
+  .mom-bar { height: 1.1rem; border-radius: 3px; min-width: 2px; }
+  .mom-bar.home { background: var(--accent); }
+  .mom-bar.away { background: repeating-linear-gradient(45deg, var(--accent2), var(--accent2) 4px, transparent 4px, transparent 7px); border: 2px solid var(--accent2); }
+  .mom-row.lead-home .home .mom-bar, .mom-row.lead-away .away .mom-bar { outline: 2px solid var(--fg); outline-offset: 1px; }
+  .mom-val { font-variant-numeric: tabular-nums; }
   #flash { position: fixed; inset: 0; background: var(--accent); opacity: 0; pointer-events: none; transition: opacity .6s; }
   #flash.on { opacity: .35; }
   @media (prefers-reduced-motion: reduce) { #flash { transition: none; } }
@@ -84,13 +98,22 @@
     <div id="live" aria-live="polite" class="sub"></div>
   </section>
 
-  <section aria-labelledby="mom-h">
+  <section id="mom-section" aria-labelledby="mom-h" hidden>
     <h2 id="mom-h">Momentum by 15-minute window</h2>
-    <table>
-      <caption class="sub">Attacking threat score per team; the leader is stated in words.</caption>
-      <thead><tr><th scope="col">Minutes</th><th scope="col">Home</th><th scope="col">Away</th><th scope="col">Leader</th></tr></thead>
-      <tbody id="momentum"></tbody>
-    </table>
+    <p id="mom-summary"></p>
+    <div class="mom" aria-hidden="true">
+      <div class="mom-row mom-head"><span id="mom-home-name"></span><span>Minutes</span><span id="mom-away-name"></span></div>
+      <div id="mom-chart"></div>
+    </div>
+    <p class="sub" aria-hidden="true">Longer bar = more attacking threat (shots count most). Solid bars are the home team; striped bars are the away team.</p>
+    <details>
+      <summary>View as table</summary>
+      <table>
+        <caption class="sub">Attacking threat score per team; the leader is stated in words.</caption>
+        <thead><tr><th scope="col">Minutes</th><th scope="col">Home</th><th scope="col">Away</th><th scope="col">Leader</th></tr></thead>
+        <tbody id="momentum"></tbody>
+      </table>
+    </details>
   </section>
 
   <details>
@@ -130,12 +153,40 @@ function render() {
     li.textContent = item.text;
     list.append(li);
   });
-  $('momentum').replaceChildren(...data.analysis.momentum.map(m => row([m.window, m.home, m.away, m.leader === 'even' ? 'Even' : m.leader])));
+  renderMomentum();
+  // Match analytics are shown for the deaf and blind profiles only.
+  $('mom-section').hidden = !['deaf', 'blind'].includes(profile());
   $('verdict').textContent = data.verification.passed
     ? `Verified: ${data.verification.checked} statements checked against the raw event data, 0 issues. Narrator source: ${data.narrative.source}.`
     : 'Verification failed.';
   $('trace').replaceChildren(...data.trace.map(t => row([t.agent, t.action, t.status, t.ms])));
   $('play').disabled = false;
+}
+
+function renderMomentum() {
+  const mom = data.analysis.momentum, home = data.match.home, away = data.match.away;
+  $('momentum').replaceChildren(...mom.map(m => row([m.window, m.home, m.away, m.leader === 'even' ? 'Even' : m.leader])));
+  $('mom-home-name').textContent = home; $('mom-away-name').textContent = away;
+  const max = Math.max(1, ...mom.map(m => Math.max(m.home, m.away)));
+  const rows = mom.map(m => {
+    const r = document.createElement('div');
+    r.className = 'mom-row' + (m.leader === home ? ' lead-home' : m.leader === away ? ' lead-away' : '');
+    const side = (cls, v) => {
+      const d = document.createElement('div'); d.className = 'mom-side ' + cls;
+      const bar = document.createElement('span'); bar.className = 'mom-bar ' + cls; bar.style.width = (v / max * 90) + '%';
+      const val = document.createElement('span'); val.className = 'mom-val'; val.textContent = v;
+      if (cls === 'home') d.append(val, bar); else d.append(bar, val);
+      return d;
+    };
+    const mid = document.createElement('div'); mid.className = 'mom-mid'; mid.textContent = m.window;
+    r.append(side('home', m.home), mid, side('away', m.away));
+    return r;
+  });
+  $('mom-chart').replaceChildren(...rows);
+  const n = (t) => mom.filter(m => m.leader === t).length, even = mom.filter(m => m.leader === 'even').length;
+  const swing = mom.reduce((b, m) => Math.abs(m.home - m.away) > Math.abs(b.home - b.away) ? m : b, mom[0]);
+  const who = swing.leader === 'even' ? 'neither side' : swing.leader;
+  $('mom-summary').textContent = `${home} led ${n(home)} of ${mom.length} windows, ${away} led ${n(away)}, and ${even} ${even === 1 ? 'was' : 'were'} even. The biggest swing came in minutes ${swing.window}, where ${who} had the edge.`;
 }
 
 async function load() {

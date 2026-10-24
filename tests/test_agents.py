@@ -8,7 +8,7 @@ from pitchside.agents.accessibility import (
 )
 from pitchside.agents.analyst import analyse
 from pitchside.agents.narrator import template_narrative
-from pitchside.agents.verifier import verify
+from pitchside.agents.verifier import mentions_minute, mentions_score, verify
 from pitchside.data.generator import generate_match
 from pitchside.models import EventType, Statement
 
@@ -101,3 +101,34 @@ def test_spatial_and_tone_helpers():
     assert describe_position(goal)
     kickoff = match.events[0]
     assert describe_position(kickoff) is None
+
+
+def _ordinal(n: int) -> str:
+    suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
+def test_verifier_accepts_ordinal_minutes_and_dash_variants():
+    match = generate_match(7)
+    narrative = template_narrative(match, analyse(match))
+    idx = next(i for i, s in enumerate(narrative.statements) if "score" in s.claims)
+    s = narrative.statements[idx]
+    event = match.event_by_id(s.event_ids[0])
+    h, a = s.claims["score"].split("-")
+    narrative.statements[idx] = Statement(
+        text=f"In the {_ordinal(event.minute)} minute, {event.player} scores. It is {h} \u2013 {a}.",
+        event_ids=s.event_ids,
+        claims=s.claims,
+    )
+    assert verify(match, narrative).passed
+
+
+def test_wording_tolerance_does_not_accept_wrong_facts():
+    assert mentions_minute("scores in the 9th minute", 9)
+    assert mentions_minute("minute 9: a booking", 9)
+    assert not mentions_minute("minute 19", 9)
+    assert not mentions_minute("minute 90", 9)
+    assert mentions_score("it is 0-1", "0-1")
+    assert mentions_score("it is 0 \u2013 1", "0-1")
+    assert not mentions_score("it is 1-0", "0-1")
+    assert not mentions_score("it is 10-1", "0-1")

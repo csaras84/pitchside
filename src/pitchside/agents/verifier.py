@@ -14,6 +14,24 @@ from pydantic import BaseModel
 from ..models import Match, Narrative
 
 
+_DASHES = str.maketrans({"\u2013": "-", "\u2014": "-", "\u2212": "-", "\u2010": "-", "\u2011": "-"})
+
+
+def mentions_minute(text: str, minute: int) -> bool:
+    """True if the text names the minute as a number: 'minute 9', '9th minute', "9'", '45+2'.
+
+    Digits must stand alone, so 'minute 19' or 'minute 90' never satisfy a claim about 9.
+    """
+    return re.search(rf"(?<!\d){minute}(?:st|nd|rd|th)?(?!\d)", text) is not None
+
+
+def mentions_score(text: str, score: str) -> bool:
+    """True if the text states the score 'H-A' with any dash style or spacing: '0-1', '0 – 1'."""
+    home, away = score.split("-")
+    cleaned = text.translate(_DASHES)
+    return re.search(rf"(?<!\d){home}\s*-\s*{away}(?!\d)", cleaned) is not None
+
+
 class Issue(BaseModel):
     statement_index: int
     field: str
@@ -76,12 +94,12 @@ def verify(match: Match, narrative: Narrative) -> Verification:
                 if s.claims["score"] != f"{h}-{a}":
                     flag(i, "score", f"{h}-{a}", s.claims["score"],
                          f"score after event {event_id} is {h}-{a}, not {s.claims['score']}")
-                elif s.claims["score"] not in s.text:
+                elif not mentions_score(s.text, s.claims["score"]):
                     flag(i, "text", s.claims["score"], s.text, "text does not state the score")
             # The prose must agree with the claims, not just the claims with the data.
             if e.player.split()[-1].lower() not in s.text.lower():
                 flag(i, "text", e.player, s.text, f"text never mentions {e.player}")
-            if not re.search(rf"\b{e.minute}\b", s.text):
+            if not mentions_minute(s.text, e.minute):
                 flag(i, "text", e.minute, s.text, f"text never mentions minute {e.minute}")
 
     return Verification(passed=not issues, checked=checked, unverified=unverified, issues=issues)

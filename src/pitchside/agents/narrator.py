@@ -32,6 +32,9 @@ Rules:
 - Each statement about a moment must list that moment's event_id in event_ids and set
   claims with keys: minute (int), player (str), team (str), type (str) and, for goals,
   score (str like "1-0"). The text must mention the player and the minute.
+- Write every minute as digits, like "minute 31" or "31st minute". Never spell numbers out.
+- Write every score as digits with a plain hyphen, home team first, exactly like "0-1".
+  Every goal statement must state the running score in that form.
 - Finish with one statement whose claims are {"final_score": "<home>-<away>"} and whose
   text states the final score.
 - If the user message lists verifier issues from a previous draft, fix every one."""
