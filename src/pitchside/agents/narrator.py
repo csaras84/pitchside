@@ -40,6 +40,41 @@ Rules:
 - If the user message lists verifier issues from a previous draft, fix every one."""
 
 
+def build_user_prompt(
+    match: Match, analysis: Analysis, feedback: list[str] | None = None
+) -> str:
+    """The facts the model may use, plus any Verifier issues from the previous draft."""
+    payload = {
+        "home": match.home,
+        "away": match.away,
+        "final_score": analysis.final_score,
+        "moments": [{"event_id": m.event_id, **m.facts} for m in analysis.key_moments],
+    }
+    user = json.dumps(payload)
+    if feedback:
+        user += "\nVerifier issues from your previous draft:\n- " + "\n- ".join(feedback)
+    return user
+
+
+def extract_json(text: str) -> dict:
+    """Pull the JSON object out of model text, tolerating ```json fences and chatter."""
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end <= start:
+        raise NarrationError("no JSON object in model output")
+    try:
+        return json.loads(text[start : end + 1])
+    except ValueError as exc:
+        raise NarrationError(f"invalid JSON in model output: {exc}") from exc
+
+
+def parse_narrative(data: dict, source: str = "llm") -> Narrative:
+    try:
+        statements = [Statement(**s) for s in data["statements"]]
+    except (KeyError, TypeError, ValueError, ValidationError) as exc:
+        raise NarrationError(f"unparseable LLM output: {exc}") from exc
+    return Narrative(statements=statements, source=source)
+
+
 def template_narrative(match: Match, analysis: Analysis) -> Narrative:
     """Deterministic narration, correct by construction. Also the safety net."""
     statements = [Statement(text=f"Welcome to {match.home} against {match.away}.")]
@@ -73,18 +108,9 @@ class Narrator:
     ) -> Narrative:
         if self.llm is None or not self.llm.available:
             return template_narrative(match, analysis)
-        payload = {
-            "home": match.home,
-            "away": match.away,
-            "final_score": analysis.final_score,
-            "moments": [{"event_id": m.event_id, **m.facts} for m in analysis.key_moments],
-        }
-        user = json.dumps(payload)
-        if feedback:
-            user += "\nVerifier issues from your previous draft:\n- " + "\n- ".join(feedback)
+        user = build_user_prompt(match, analysis, feedback)
         try:
             data = self.llm.complete_json(SYSTEM_PROMPT, user)
-            statements = [Statement(**s) for s in data["statements"]]
-        except (KeyError, TypeError, ValueError, ValidationError) as exc:
+        except ValueError as exc:
             raise NarrationError(f"unparseable LLM output: {exc}") from exc
-        return Narrative(statements=statements, source="llm")
+        return parse_narrative(data)

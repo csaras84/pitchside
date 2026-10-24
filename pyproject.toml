@@ -17,6 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+agent = ["agent-framework>=1.12"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
