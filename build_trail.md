@@ -150,3 +150,19 @@ then the agent trace showing the Verifier rejecting a wrong draft and accepting 
 - Decision: deafblind stays (already built, near-zero cost). Claim "braille-ready text format" only; it has not been tested on a real braille display.
 - Verified: headless Chromium run with real pipeline output, all four profiles, no page errors; JS syntax check passes. Not verified on a real screen reader.
 - Still open: Foundry connection (not started), Agent Framework port, Azure deployment, demo video. Working deadline Oct 27 evening IST.
+
+### Oct 24, 23:02: Foundry connected
+- Azure subscription and a Foundry resource created; `gpt-4.1-mini` deployed as **Global Standard** (pay per token). Chosen because the job is small (a short grounded recap in JSON), it is not a reasoning model, and it supports structured output. The portal marks it **Legacy** (lifecycle label): it works, but check its retirement date against the Nov 10 judging window.
+- Problem: the connection test returned `404 Resource not found`. Cause: the deployment is served by Azure's v1 API (`.../openai/v1/`), while the code used the older `AzureOpenAI` client with an `api-version`. Fix: `llm.py` now uses the standard OpenAI client against `<endpoint>/openai/v1/` and normalises any copied endpoint or Target URI; no API version needed.
+- Added `scripts/check_foundry.py` (reads `.env`, never prints secrets, one tiny JSON call): **SUCCESS**. An empty "project endpoint" in the portal is irrelevant, since the app uses the resource endpoint and a key.
+- Secrets: the key lives only in `.env`, which is git-ignored.
+
+### Oct 24, 23:15: first real model output; Verifier tightened
+- First full run with the real model ended on the template fallback: the Verifier rejected three drafts. The facts were right but the wording was not in the accepted format (for example ordinal minutes like "9th", or a different dash in scores).
+- Fix: the Verifier now accepts wording variants (ordinal minutes, any dash style) but still rejects wrong facts ("minute 19" does not satisfy minute 9, "1-0" does not satisfy 0-1). The prompt now asks for digits, plain hyphens and home-team-first scores.
+- Result: the model's draft passed on the first attempt (`Narrator source: LLM`, about 5.5 s, 7 statements checked).
+- Found a real hole: the final-score check only looked for the two digits anywhere in the sentence, so "Harbour United winning 2-0" passed and so would a wrong winner. Fix: the final statement must give the score home-first (`0-2`) or "Home 0, Away 2" naming both teams; winner-first order and wrong winners are rejected. New tests cover it.
+- Lint: `ruff` flagged unneeded `noqa` markers and import spacing in new files; fixed. CI had been red on the previous push for this reason.
+- Status: 21 tests pass locally, `ruff check .` clean, pushed. Not yet confirmed: the final CI run after the last push, and `scripts/try_llm.py` after the final-score rule.
+- Next: confirm CI is green; decide order of Agent Framework port vs Azure deployment (both time-boxed); add a "show a caught error" demo button; check the Legacy model's retirement date.
+
