@@ -23,8 +23,16 @@ class EventType(str, Enum):
     GOAL = "goal"
     FOUL = "foul"
     YELLOW_CARD = "yellow_card"
+    RED_CARD = "red_card"
     CORNER = "corner"
     FULL_TIME = "full_time"
+
+
+class Depth(str, Enum):
+    """How much explanation a fan wants. Independent of the accessibility profile."""
+
+    CASUAL = "casual"
+    ANALYST = "analyst"
 
 
 class Event(BaseModel):
@@ -39,17 +47,44 @@ class Event(BaseModel):
     detail: str = ""
 
 
+class Plant(BaseModel):
+    """A storyline the generator wrote into a synthetic match on purpose.
+
+    It is ground truth for evaluation only: the agents never see it, and `storycheck`
+    measures whether the Analyst finds it from the raw events alone.
+    """
+
+    code: str
+    team: str
+    minute: int
+    note: str
+
+
 class Match(BaseModel):
     home: str
     away: str
     seed: int
     events: list[Event]
+    clock: int = Field(default=90, ge=0, le=120)  # minutes played; 90 means the full match
+    planted: list[Plant] = Field(default_factory=list)  # evaluation only, see Plant
+
+    @property
+    def is_final(self) -> bool:
+        return self.clock >= 90
+
+    def until(self, minute: int) -> Match:
+        """The match as it stood at `minute`: later events are not known yet."""
+        kept = [e for e in self.events if e.minute <= minute]
+        return Match(
+            home=self.home, away=self.away, seed=self.seed, events=kept, clock=min(minute, 90),
+            planted=self.planted,
+        )
 
     def event_by_id(self, event_id: int) -> Event | None:
         return next((e for e in self.events if e.id == event_id), None)
 
     def score_after(self, event_id: int | None = None) -> tuple[int, int]:
-        """Score (home, away) after the given event id, or at full time if None."""
+        """Score (home, away) after the given event id, or so far if None."""
         home = away = 0
         for e in self.events:
             if e.type == EventType.GOAL:

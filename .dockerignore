@@ -1,0 +1,16 @@
+# Keep secrets and local clutter out of the image.
+.env
+.env.*
+!.env.example
+.git
+.github
+.venv
+venv
+__pycache__
+*.pyc
+*.egg-info
+.pytest_cache
+.ruff_cache
+tests
+scripts
+build_trail.md

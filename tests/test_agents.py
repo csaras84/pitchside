@@ -118,7 +118,7 @@ def test_verifier_accepts_ordinal_minutes_and_dash_variants():
     narrative.statements[idx] = Statement(
         text=f"In the {_ordinal(event.minute)} minute, {event.player} scores. It is {h} \u2013 {a}.",
         event_ids=s.event_ids,
-        claims=s.claims,
+        claims={k: v for k, v in s.claims.items() if k not in ("why", "evidence")},
     )
     assert verify(match, narrative).passed
 

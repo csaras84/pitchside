@@ -15,7 +15,8 @@ from xml.sax.saxutils import escape
 
 from pydantic import BaseModel
 
-from ..models import Event, EventType, Match, Narrative
+from ..models import Depth, Event, EventType, Match, Narrative
+from .analyst import insights_for
 
 BRAILLE_CELLS = 40
 
@@ -45,6 +46,7 @@ SOUND_CUES: dict[EventType, str] = {
     EventType.CORNER: "[crowd rises]",
     EventType.FOUL: "[whistle]",
     EventType.YELLOW_CARD: "[whistle, referee shows a card]",
+    EventType.RED_CARD: "[crowd gasps, whistle, referee shows a red card]",
     EventType.FULL_TIME: "[final whistle]",
 }
 
@@ -54,6 +56,7 @@ HAPTICS: dict[EventType, list[int]] = {
     EventType.SAVE: [150],
     EventType.SHOT: [100],
     EventType.YELLOW_CARD: [100, 50, 100],
+    EventType.RED_CARD: [400, 100, 400],
     EventType.FULL_TIME: [800],
 }
 
@@ -108,6 +111,7 @@ def _plain(e: Event, match: Match) -> str:
         EventType.SAVE: f"{m} {e.player} shoots. The goalkeeper saves it.",
         EventType.SHOT: f"{m} {e.player} shoots. It misses the goal.",
         EventType.YELLOW_CARD: f"{m} {e.player} gets a yellow card.",
+        EventType.RED_CARD: f"{m} {e.player} is sent off.",
         EventType.FOUL: f"{m} Foul by {e.player}.",
         EventType.CORNER: f"{m} Corner kick to {e.team}.",
         EventType.KICKOFF: "The match starts.",
@@ -115,7 +119,17 @@ def _plain(e: Event, match: Match) -> str:
     }.get(e.type, f"{m} {e.player} has the ball.")
 
 
-def adapt(match: Match, narrative: Narrative, profile: Profile) -> AccessibleRecap:
+def why_it_matters(match: Match, event: Event, depth: Depth) -> str:
+    """The Analyst's reasons for a moment, as plain sentences (one for casual, all for analyst)."""
+    found = insights_for(match, event)
+    if Depth(depth) == Depth.CASUAL:
+        found = found[:1]
+    return " ".join(i.text for i in found)
+
+
+def adapt(
+    match: Match, narrative: Narrative, profile: Profile, depth: Depth = Depth.CASUAL
+) -> AccessibleRecap:
     items: list[AccessibleItem] = []
     for s in narrative.statements:
         event = match.event_by_id(s.event_ids[0]) if s.event_ids else None
@@ -133,6 +147,9 @@ def adapt(match: Match, narrative: Narrative, profile: Profile) -> AccessibleRec
 
         if profile == Profile.DEAF:
             plain = _plain(event, match)
+            why = why_it_matters(match, event, depth)
+            if why:
+                plain += f" Why it matters: {why}"
             item.text = f"{cue} {plain}" if cue else plain
             item.sound_cue, item.haptic = cue, haptic
         elif profile == Profile.BLIND:
@@ -142,6 +159,9 @@ def adapt(match: Match, narrative: Narrative, profile: Profile) -> AccessibleRec
             plain = _plain(event, match)
             if phrase:
                 plain += f" Location: {phrase}."
+            why = why_it_matters(match, event, depth)
+            if why:
+                plain += f" Why it matters: {why}"
             item.text = "\n".join(textwrap.wrap(plain, BRAILLE_CELLS))
             item.spatial, item.haptic = phrase, haptic
         items.append(item)

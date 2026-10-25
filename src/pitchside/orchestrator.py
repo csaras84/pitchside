@@ -13,6 +13,7 @@ from __future__ import annotations
 from .agents.accessibility import Profile
 from .agents.narrator import Narrator
 from .agents.translator import Translator
+from .models import Depth
 from .pipeline_steps import (
     PipelineResult,
     RunState,
@@ -44,11 +45,19 @@ class Orchestrator:
         seed: int = 7,
         profiles: list[Profile] | None = None,
         language: str = "en",
+        depth: Depth = Depth.CASUAL,
+        archetype: str | None = None,
+        up_to_minute: int | None = None,
+        fault: str | None = None,
     ) -> PipelineResult:
         state = RunState(
             seed=seed,
             profiles=profiles or list(Profile),
             language=language,
+            depth=Depth(depth),
+            archetype=archetype,
+            up_to_minute=up_to_minute,
+            fault=fault,
             max_attempts=self.max_attempts,
         )
         step_analyse(state)

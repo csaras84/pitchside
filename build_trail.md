@@ -23,6 +23,8 @@ and streaming platforms.
 - A short pitch: what it does, which Microsoft and Azure technologies it uses, and what problem it solves.
 - A **demo video under 2 minutes**, public on YouTube, Vimeo, Facebook Video or Youku, showing the
   project running, with no third-party trademarks or copyrighted music.
+- A **working project link** (website, functioning demo or test build) that judges can use free of
+  charge and without restriction until judging ends on Nov 10. This is a requirement, not a nicety.
 - Submission on the Innovation Studio Platform before the deadline above.
 
 **Capabilities the brief asks for (we pick a focused subset)**
@@ -60,11 +62,43 @@ it can state wrong scores, minutes or players.
 - Explainable: every statement traces back to events and passes the Verifier.
 - Resilient: the whole app works offline with no credentials, so a failed cloud call never breaks the demo.
 - Honest: claim only what has been tested (no accessibility conformance claims before real testing).
+- No decorative numbers: a metric appears only if the data really holds it or a documented formula
+  derives it. No speed or distance telemetry is invented to look sophisticated.
 
-**Demo plan (under 2 minutes):** show one goal rendered four ways (standard, deaf, blind, deafblind),
-then the agent trace showing the Verifier rejecting a wrong draft and accepting the corrected one.
+### Added on Oct 25, after reading the official brief and two outside reviews
 
-**Out of scope for now:** sign-language avatar (roadmap only), real broadcast data, user accounts.
+The brief describes five stages: ingest events as they happen, interpret them, explain why a moment
+matters, render alongside the match, and personalize. The first version covered interpretation and
+rendering well and the other three thinly. The plan to close that, in priority order:
+
+1. **A working public link** on Azure Container Apps, with cost guardrails (result cache, per-client
+   limit, hourly cloud budget that falls back to the offline agents instead of refusing anyone).
+2. **Azure AI Translator connected for real.** Note the Verifier checks the English source; the
+   translation is ordinary machine translation on top and is described that way.
+3. **"Why it matters"**: the Analyst computes the evidence (xG swing, lead changes, momentum before
+   and after a red card) in plain code; the Narrator only phrases it; the Verifier checks the
+   numbers. No evidence, no statement.
+4. **Two independent settings**: *depth* (casual fan or tactical analyst) and *presentation*
+   (standard, deaf, blind, deafblind). Any pair works, 8 experiences, one pipeline. Favourite club or
+   player is a possible third setting (a filter on which moments get the most space).
+5. **Simulated live replay**: the match unfolds minute by minute and the page updates as it goes.
+   This touches the trust core: a half-played match has no final score, so the template, the prompt
+   and the Verifier's final-score rule become "score so far" with the same strictness.
+6. **Data with more character, kept honest**: three story archetypes (for example red-card swing,
+   late comeback, dominant but wasteful), a few new event types (tackle, turnover), match context, a
+   private list of planted storylines to check whether the Analyst recovers them, and a short
+   dataset card. Everything is generated from one seed and kept internally consistent.
+7. **A reproducible Verifier demo**: a clearly labelled fault-injection switch corrupts the first
+   draft's score or minute once, so the trace shows a real rejection, feedback and corrected retry.
+   The real model rarely errs, so the injected fault is labelled as injected.
+
+**Demo plan (under 2 minutes):** a live replay of a red-card-swing match, the same moment as a
+casual fan and as an analyst, rendered in the four presentations, then the agent trace showing the
+Verifier rejecting an injected error and accepting the corrected draft.
+
+**Out of scope:** player tracking and speed or distance indicators (they would need positional data
+we do not have; roadmap only), auto-eventing from video, sign-language avatar, real broadcast data,
+user accounts.
 
 ---
 
@@ -108,18 +142,19 @@ then the agent trace showing the Verifier rejecting a wrong draft and accepting 
 ---
 
 ## Next up
-- [ ] Register for the hackathon (closes Oct 21, 12:30 AM IST)
-- [ ] Unzip, `pip install -e ".[dev]"`, `pytest -q`, run the app locally
-- [ ] Create the public GitHub repo and push (with this file)
-- [ ] Create Azure subscription and Foundry project; fill `.env`
-- [ ] Narrator on a real Foundry deployment; confirm the Verifier loop with real LLM output
-- [ ] Port orchestration to Microsoft Agent Framework
-- [ ] Deploy to Azure Container Apps
+Done: registered; tests run on the real machine; public repo and green CI; Azure subscription and
+Foundry; real model with the Verifier loop; Microsoft Agent Framework workflow.
+
+- [ ] Deploy guardrails and the Container Apps script (written Oct 25, not yet run)
+- [ ] Azure AI Translator resource and keys; check Tamil, Hindi, Spanish, French end to end
+- [ ] Analyst "why it matters" evidence, depth setting (casual or analyst), UI selectors
+- [ ] Story archetypes, new event types, planted storylines, dataset card
+- [ ] Simulated live replay (hard cutoff Mon Oct 26, 2:00 PM IST), then feature freeze and redeploy
+- [ ] Fault-injection demo of the Verifier
+- [ ] Screen-reader pass (NVDA or VoiceOver) and Accessibility Insights; fix issues
 - [ ] Azure AI Speech audio (first thing to cut if behind)
-- [ ] Screen-reader and Accessibility Insights pass; fix issues
-- [ ] Feature freeze Oct 25
-- [ ] README polish, pitch text, demo video (under 2 min) recorded Oct 26
-- [ ] Submit Oct 27, well before the cutoff
+- [ ] Pitch text, demo video (under 2 min, strictly), recorded Oct 27
+- [ ] Submit Oct 27 evening IST, well before the Oct 28, 12:29 PM IST cutoff
 
 ## Log
 <!-- Add entries below: date and time, what changed, what broke, what you decided. -->
@@ -165,4 +200,25 @@ then the agent trace showing the Verifier rejecting a wrong draft and accepting 
 - Lint: `ruff` flagged unneeded `noqa` markers and import spacing in new files; fixed. CI had been red on the previous push for this reason.
 - Status: 21 tests pass locally, `ruff check .` clean, pushed. Not yet confirmed: the final CI run after the last push, and `scripts/try_llm.py` after the final-score rule.
 - Next: confirm CI is green; decide order of Agent Framework port vs Azure deployment (both time-boxed); add a "show a caught error" demo button; check the Legacy model's retirement date.
+
+### Oct 24, 23:45: Microsoft Agent Framework workflow
+- Moved the pipeline steps into `pipeline_steps.py` so two engines share them: the plain orchestrator and an opt-in Agent Framework workflow (`af_workflow.py`, selected with `?engine=agent_framework`). Each role is a workflow executor, the Narrator is a framework `Agent` backed by the Foundry deployment, and the Verifier routes with conditional edges. Retries are unrolled into separate nodes because no loop-back edge was documented.
+- `scripts/try_agent_framework.py` ran against the real model: verified recap through the workflow.
+- Result at the time: 30 tests pass locally, `ruff check .` clean, pushed. The CI workflow does not install the `agent` extra, so the workflow tests skip there.
+
+### Oct 25, about 14:00: official rules and brief read against the project
+- Corrected my own earlier assumption: a **working link is required** (rules 4.8) and must stay free to use until Nov 10. Hosting therefore moves from optional to required.
+- Retirement check: the Azure docs list `gpt-4.1-mini` (2025-04-14) as Deprecated with retirement on 2027-04-14, well after judging. The portal's "Legacy" label is not a problem for this window.
+- Gaps against the brief: events are not ingested live, no "why it matters", personalization is accessibility and language only, the synthetic data has few event types, Azure Translator is not configured so languages fall back to English, and the app is not deployed.
+
+### Oct 25, 15:30: direction after two outside reviews
+- Both reviews agreed on: deploy early, keep the deterministic Analyst and Verifier, add "why it matters", add a casual or analyst mode, replace a full tracking simulation with a simulated live feed.
+- They disagreed on adding speed and distance values to events. Decision: **no decorative telemetry**. A project whose promise is that nothing unverified reaches the fan must not show invented numbers as measured. Speed and distance indicators move to the roadmap; my earlier idea of a time-boxed 22-player tracking layer is dropped.
+- Decision: depth (casual or analyst) and presentation (standard, deaf, blind, deafblind) are independent settings, giving 8 experiences from one pipeline. The Verifier checks the story before the Adapter renders it, so all 8 stay fact-checked.
+- Noted for the pitch: translations are not verified (the Verifier checks the English source).
+
+### Oct 25, 15:25: deployment preparation written (not yet run)
+- Added `guard.py` (result cache, per-client limit of 30 uncached requests a minute, and a global budget of 200 cloud-backed runs an hour; once spent, the app answers with the offline template agents instead of refusing anyone), wired into `api.py` with an `X-Pitchside-Cache` and `X-Pitchside-Mode` response header.
+- Added `Dockerfile` (tries the Agent Framework extra and says so if it falls back), `.dockerignore` (keeps `.env` out), `scripts/deploy_azure.ps1` (reads `.env`, stores the two keys as Container Apps secrets, one replica so the in-memory counters stay correct) and the guard settings in `.env.example`.
+- Verified in the build sandbox: lint clean on the new files; the 4 guard unit tests pass. **Not verified:** the 2 API-level guard tests (FastAPI cannot be installed there), the Docker build, the deploy script, and the full suite on the real machine (expected 36 tests).
 

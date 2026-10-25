@@ -21,7 +21,7 @@ class ScriptedNarrator:
         self.calls = 0
         self.feedback_seen = []
 
-    async def narrate(self, match, analysis, feedback=None):
+    async def narrate(self, match, analysis, feedback=None, depth="casual"):
         self.feedback_seen.append(feedback)
         item = self.items[min(self.calls, len(self.items) - 1)]
         self.calls += 1

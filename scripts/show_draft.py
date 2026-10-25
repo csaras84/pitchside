@@ -1,6 +1,6 @@
 """Show the model's raw first draft next to what the Verifier says about it.
 
-    .venv\\Scripts\\python scripts\\show_draft.py [seed]
+    .venv\\Scripts\\python scripts\\show_draft.py [seed] [casual|analyst]
 """
 
 from __future__ import annotations
@@ -23,14 +23,16 @@ from pitchside.agents.narrator import Narrator
 from pitchside.agents.verifier import verify
 from pitchside.data.generator import generate_match
 from pitchside.llm import LLMClient
+from pitchside.models import Depth
 
 
 def main() -> int:
     seed = int(sys.argv[1]) if len(sys.argv) > 1 else 7
+    depth = Depth(sys.argv[2]) if len(sys.argv) > 2 else Depth.CASUAL
     match = generate_match(seed)
     analysis = analyse(match)
-    draft = Narrator(LLMClient()).narrate(match, analysis)
-    result = verify(match, draft)
+    draft = Narrator(LLMClient()).narrate(match, analysis, depth=depth)
+    result = verify(match, draft, depth)
     print(f"Verifier: passed={result.passed}\n")
     for i, s in enumerate(draft.statements):
         print(f"[{i}] {s.text}")

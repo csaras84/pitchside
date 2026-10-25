@@ -1,7 +1,7 @@
 """Run the whole pipeline as a Microsoft Agent Framework workflow with the real model.
 
     pip install agent-framework          (once, inside the project's virtual environment)
-    .venv\\Scripts\\python scripts\\try_agent_framework.py [seed]
+    .venv\\Scripts\\python scripts\\try_agent_framework.py [seed] [casual|analyst]
 
 Shows each step the workflow executed, who wrote the recap, and the final text.
 """
@@ -21,13 +21,15 @@ for raw in (ROOT / ".env").read_text(encoding="utf-8").splitlines():
 
 from pitchside.af_workflow import AgentFrameworkOrchestrator, AgentNarrator
 from pitchside.llm import LLMClient
+from pitchside.models import Depth
 
 
 def main() -> int:
     seed = int(sys.argv[1]) if len(sys.argv) > 1 else 7
+    depth = Depth(sys.argv[2]) if len(sys.argv) > 2 else Depth.CASUAL
     llm = LLMClient()
     print(f"Foundry configured: {llm.available}  (if False, the narrator uses the template)\n")
-    result = AgentFrameworkOrchestrator(narrator=AgentNarrator(llm)).run(seed=seed)
+    result = AgentFrameworkOrchestrator(narrator=AgentNarrator(llm)).run(seed=seed, depth=depth)
 
     print(f"Match seed {seed}: final score {result.analysis.final_score}")
     print(f"Narrator source: {result.narrative.source.upper()}\n")

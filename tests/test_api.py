@@ -37,3 +37,48 @@ def test_agent_framework_engine_is_opt_in():
     assert r.status_code == (200 if installed else 501)
     if installed:
         assert r.json()["verification"]["passed"] is True
+
+
+def test_depth_and_archetype_are_validated():
+    assert client.get("/api/recap", params={"depth": "expert"}).status_code == 422
+    assert client.get("/api/recap", params={"archetype": "nonsense"}).status_code == 422
+
+
+def test_story_matches_report_whether_the_analyst_found_the_storyline():
+    r = client.get(
+        "/api/recap",
+        params={"seed": 3, "profiles": "deaf", "archetype": "red_card_swing", "depth": "analyst"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["depth"] == "analyst"
+    assert body["verification"]["passed"] is True
+    assert body["story"] and body["story"][0]["recovered"] is True
+
+
+def test_replay_returns_verified_frames_ending_at_full_time():
+    r = client.get("/api/replay", params={"seed": 3, "profiles": "deaf", "archetype": "red_card_swing"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["minutes"][-1] == 90 and len(body["frames"]) == len(body["minutes"])
+    assert all(f["verification"]["passed"] for f in body["frames"])
+    assert body["frames"][0]["match"]["clock"] == body["minutes"][0]
+    assert client.get("/api/replay", params={"seed": 3, "profiles": "deaf",
+                                             "archetype": "red_card_swing"}).headers["X-Pitchside-Cache"] == "hit"
+
+
+def test_replay_validates_input():
+    assert client.get("/api/replay", params={"depth": "expert"}).status_code == 422
+    assert client.get("/api/replay", params={"archetype": "nonsense"}).status_code == 422
+    assert client.get("/api/replay", params={"profiles": "martian"}).status_code == 422
+
+
+def test_fault_demo_is_validated_and_labelled():
+    assert client.get("/api/recap", params={"fault": "gremlins"}).status_code == 422
+    r = client.get("/api/recap", params={"seed": 3, "profiles": "deaf", "archetype": "red_card_swing",
+                                         "fault": "wrong_score"})
+    assert r.status_code == 200
+    trace = r.json()["trace"]
+    assert any(t["agent"] == "demo" and t["detail"].startswith("INJECTED FAULT") for t in trace)
+    assert any(t["status"] == "rejected" for t in trace)
+    assert r.json()["verification"]["passed"] is True

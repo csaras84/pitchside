@@ -21,7 +21,9 @@ from .agents.narrator import Narrator, template_narrative
 from .agents.translator import Translator
 from .agents.verifier import Verification, verify
 from .data.generator import generate_match
-from .models import Match, Narrative
+from .faults import inject
+from .models import Depth, Match, Narrative
+from .storycheck import StoryCheck, check_planted
 
 
 class TraceEntry(BaseModel):
@@ -39,7 +41,9 @@ class PipelineResult(BaseModel):
     verification: Verification
     recaps: dict[str, AccessibleRecap]
     language: str = "en"
+    depth: str = "casual"
     translated: bool = False
+    story: list[StoryCheck] = Field(default_factory=list)
     trace: list[TraceEntry] = Field(default_factory=list)
 
 
@@ -65,6 +69,10 @@ class RunState:
     seed: int = 7
     profiles: list[Profile] = field(default_factory=lambda: list(Profile))
     language: str = "en"
+    depth: Depth = Depth.CASUAL
+    archetype: str | None = None
+    up_to_minute: int | None = None  # replay: only what had happened by this minute
+    fault: str | None = None  # Verifier demo: corrupt the first draft on purpose
     max_attempts: int = 3
     attempt: int = 0
     match: Match | None = None
@@ -88,7 +96,9 @@ class RunState:
 
 def step_analyse(state: RunState) -> None:
     with span(state.trace, "data", "generate synthetic match"):
-        state.match = generate_match(state.seed)
+        state.match = generate_match(state.seed, archetype=state.archetype)
+        if state.up_to_minute is not None and state.up_to_minute < 90:
+            state.match = state.match.until(state.up_to_minute)
     with span(state.trace, "analyst", "analyse events"):
         state.analysis = analyse(state.match)
 
@@ -108,15 +118,31 @@ def step_narrate(state: RunState, narrator: Narrator) -> None:
     action = start_attempt(state)
     try:
         with span(state.trace, "narrator", action):
-            state.draft = narrator.narrate(state.match, state.analysis, state.feedback or None)
+            state.draft = narrator.narrate(
+                state.match, state.analysis, state.feedback or None, state.depth
+            )
     except Exception as exc:  # noqa: BLE001  LLM outage, bad JSON, ...: recover, don't crash
         record_narration_failure(state, exc)
+    maybe_inject_fault(state)
+
+
+def maybe_inject_fault(state: RunState) -> None:
+    """Verifier demo: corrupt the first draft, and say so loudly in the trace."""
+    if not state.fault or state.attempt != 1 or state.draft is None:
+        return
+    with span(state.trace, "demo", f"inject fault: {state.fault}") as entry:
+        try:
+            state.draft, what = inject(state.draft, state.fault)
+            entry.status = "injected"
+            entry.detail = f"INJECTED FAULT (demo, not a model mistake): {what}"
+        except ValueError as exc:
+            entry.status, entry.detail = "skipped", str(exc)
 
 
 def step_verify(state: RunState) -> None:
     draft = state.draft
     with span(state.trace, "verifier", f"check draft #{state.attempt}") as entry:
-        result = verify(state.match, draft)
+        result = verify(state.match, draft, state.depth)
         if not result.passed:
             entry.status = "rejected"
             entry.detail = "; ".join(i.message for i in result.issues[:3])
@@ -130,15 +156,15 @@ def step_verify(state: RunState) -> None:
 def step_fallback(state: RunState) -> None:
     with span(state.trace, "narrator", "deterministic fallback") as entry:
         entry.status = "fallback"
-        state.narrative = template_narrative(state.match, state.analysis)
+        state.narrative = template_narrative(state.match, state.analysis, state.depth)
     with span(state.trace, "verifier", "check fallback"):
-        state.verification = verify(state.match, state.narrative)
+        state.verification = verify(state.match, state.narrative, state.depth)
 
 
 def step_adapt(state: RunState, translator: Translator) -> None:
     for profile in state.profiles:
         with span(state.trace, "accessibility", f"adapt for {profile.value}"):
-            recap = adapt(state.match, state.narrative, profile)
+            recap = adapt(state.match, state.narrative, profile, state.depth)
         if state.language != "en":
             action = f"{profile.value} -> {state.language}"
             with span(state.trace, "translator", action) as entry:
@@ -162,6 +188,8 @@ def build_result(state: RunState) -> PipelineResult:
         verification=state.verification,
         recaps=state.recaps,
         language=state.language,
+        depth=state.depth.value,
         translated=state.translated,
+        story=check_planted(state.match, state.analysis),
         trace=state.trace,
     )

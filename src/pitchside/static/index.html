@@ -68,6 +68,16 @@
     <label><input type="radio" name="profile" value="deaf"> Deaf or hard of hearing</label>
     <label><input type="radio" name="profile" value="blind"> Blind or low vision</label>
     <label><input type="radio" name="profile" value="deafblind"> Deafblind (braille display)</label>
+  </fieldset>
+
+  <fieldset>
+    <legend>How much detail do you want?</legend>
+    <label><input type="radio" name="depth" value="casual" checked> Casual fan: the short reason</label>
+    <label><input type="radio" name="depth" value="analyst"> Tactical analyst: every reason, with the numbers</label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Match and display</legend>
     <p>
       <label for="lang">Language</label>
       <select id="lang">
@@ -76,14 +86,44 @@
       </select>
       <label for="seed">Match</label>
       <select id="seed"><option value="7">Match 7</option><option value="11">Match 11</option><option value="23">Match 23</option></select>
+      <label for="story">Story</label>
+      <select id="story">
+        <option value="">Ordinary match</option>
+        <option value="red_card_swing">Red-card swing</option>
+        <option value="late_comeback">Late comeback</option>
+        <option value="dominant_wasteful">Dominant but wasteful</option>
+      </select>
     </p>
     <p>
+      <label for="fault">Verifier demo</label>
+      <select id="fault" aria-describedby="fault-help">
+        <option value="">Off</option>
+        <option value="wrong_minute">Inject a wrong minute into draft 1</option>
+        <option value="wrong_score">Inject a wrong score into draft 1</option>
+      </select>
+    </p>
+    <p id="fault-help" class="sub">For demonstration only: the first draft is deliberately corrupted so you can watch the Verifier reject it and the retry pass. The trace says so.</p>
+    <p>
       <button id="load" class="primary">Load recap</button>
-      <button id="play" disabled>Play match live</button>
+      <button id="play" disabled>Step through this recap</button>
       <button id="contrast" aria-pressed="false">High contrast</button>
       <button id="bigger">Larger text</button>
     </p>
   </fieldset>
+
+  <section aria-labelledby="rp-h" id="replay-section">
+    <h2 id="rp-h">Simulated live feed</h2>
+    <p class="sub">A finished synthetic match played back minute by minute, so you can see the analysis update as events arrive. Each step is written and verified using only what had happened by that minute. Steps are written by the built-in agents, in English.</p>
+    <p>
+      <button id="rp-start" class="primary">Start simulated match</button>
+      <button id="rp-toggle" hidden>Pause</button>
+    </p>
+    <p id="rp-controls" hidden>
+      <label for="rp-scrub">Match minute</label>
+      <input type="range" id="rp-scrub" min="0" max="0" step="1" value="0">
+    </p>
+    <p id="rp-clock" class="sub" role="status"></p>
+  </section>
 
   <section aria-labelledby="score-h">
     <h2 id="score-h">Score</h2>
@@ -98,15 +138,17 @@
     <div id="live" aria-live="polite" class="sub"></div>
   </section>
 
-  <section id="mom-section" aria-labelledby="mom-h" hidden>
+  <section id="mom-section" aria-labelledby="mom-h">
     <h2 id="mom-h">Momentum by 15-minute window</h2>
     <p id="mom-summary"></p>
-    <div class="mom" aria-hidden="true">
+    <div id="mom-visual" aria-hidden="true">
+    <div class="mom">
       <div class="mom-row mom-head"><span id="mom-home-name"></span><span>Minutes</span><span id="mom-away-name"></span></div>
       <div id="mom-chart"></div>
     </div>
-    <p class="sub" aria-hidden="true">Longer bar = more attacking threat (shots count most). Solid bars are the home team; striped bars are the away team.</p>
-    <details>
+    <p class="sub">Longer bar = more attacking threat (shots count most). Solid bars are the home team; striped bars are the away team.</p>
+    </div>
+    <details id="mom-table">
       <summary>View as table</summary>
       <table>
         <caption class="sub">Attacking threat score per team; the leader is stated in words.</caption>
@@ -116,11 +158,17 @@
     </details>
   </section>
 
-  <details>
+  <section id="story-section" aria-labelledby="story-h" hidden>
+    <h2 id="story-h">Did the Analyst find the planted storyline?</h2>
+    <p class="sub">This synthetic match was written with a storyline on purpose. The Analyst never saw that note: it worked from the raw events alone.</p>
+    <p id="story-text"></p>
+  </section>
+
+  <details id="trace-details">
     <summary>How was this verified? (agent trace)</summary>
     <p id="verdict"></p>
     <table>
-      <thead><tr><th scope="col">Agent</th><th scope="col">Action</th><th scope="col">Status</th><th scope="col">ms</th></tr></thead>
+      <thead><tr><th scope="col">Agent</th><th scope="col">Action</th><th scope="col">Status</th><th scope="col">ms</th><th scope="col">Detail</th></tr></thead>
       <tbody id="trace"></tbody>
     </table>
   </details>
@@ -128,7 +176,8 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
-let data = null, timer = null, audioCtx = null;
+let data = null, timer = null, audioCtx = null, summaryText = '', offline = false;
+let replay = null, rpIdx = 0, rpTimer = null, prevTexts = new Set();
 
 const profile = () => document.querySelector('input[name="profile"]:checked').value;
 const LOCALES = { en: 'en-GB', es: 'es-ES', fr: 'fr-FR', hi: 'hi-IN', ta: 'ta-IN' };
@@ -140,9 +189,14 @@ function render() {
   if (!data) return;
   const recap = data.recaps[profile()];
   const [h, a] = data.analysis.final_score.split('-');
-  $('score').textContent = `${data.match.home} ${h}, ${data.match.away} ${a}`;
-  $('status').textContent = data.language !== 'en' && !data.translated
-    ? 'Translation service not configured: showing English.' : '';
+  const part = data.match.clock < 90;
+  $('score').textContent = `${part ? `After ${data.match.clock} minutes: ` : ''}${data.match.home} ${h}, ${data.match.away} ${a}`;
+  const notes = [];
+  if (data.trace.some(t => t.agent === 'demo' && t.status === 'injected')) notes.push('Verifier demo: a fault was injected into the first draft on purpose. The agent trace below shows it being caught.');
+  if (part) notes.push(`Simulated live feed: this is the match after ${data.match.clock} minutes. Nothing later is known yet.`);
+  if (data.language !== 'en' && !data.translated) notes.push('Translation is unavailable right now: showing English.');
+  if (offline) notes.push('This demo\'s cloud budget for the hour is used up, so this recap was written by the built-in template agents.');
+  $('status').textContent = notes.join(' ');
   $('notes').textContent = recap.notes.join(' ');
   const list = $('items'); list.replaceChildren();
   recap.items.forEach((item, i) => {
@@ -154,12 +208,13 @@ function render() {
     list.append(li);
   });
   renderMomentum();
-  // Match analytics are shown for the deaf and blind profiles only.
-  $('mom-section').hidden = !['deaf', 'blind'].includes(profile());
+  showAnalytics();
+  showStory();
   $('verdict').textContent = data.verification.passed
-    ? `Verified: ${data.verification.checked} statements checked against the raw event data, 0 issues. Narrator source: ${data.narrative.source}.`
+    ? `Verified: ${data.verification.checked} statements checked against the raw event data, 0 issues. Narrator source: ${data.narrative.source}. Detail level: ${data.depth}.`
     : 'Verification failed.';
-  $('trace').replaceChildren(...data.trace.map(t => row([t.agent, t.action, t.status, t.ms])));
+  if (data.trace.some(t => t.agent === 'demo')) $('trace-details').open = true;
+  $('trace').replaceChildren(...data.trace.map(t => row([t.agent, t.action, t.status, t.ms, t.detail || ''])));
   $('play').disabled = false;
 }
 
@@ -186,14 +241,50 @@ function renderMomentum() {
   const n = (t) => mom.filter(m => m.leader === t).length, even = mom.filter(m => m.leader === 'even').length;
   const swing = mom.reduce((b, m) => Math.abs(m.home - m.away) > Math.abs(b.home - b.away) ? m : b, mom[0]);
   const who = swing.leader === 'even' ? 'neither side' : swing.leader;
-  $('mom-summary').textContent = `${home} led ${n(home)} of ${mom.length} windows, ${away} led ${n(away)}, and ${even} ${even === 1 ? 'was' : 'were'} even. The biggest swing came in minutes ${swing.window}, where ${who} had the edge.`;
+  summaryText = `${home} led ${n(home)} of ${mom.length} windows, ${away} led ${n(away)}, and ${even} ${even === 1 ? 'was' : 'were'} even. The biggest swing came in minutes ${swing.window}, where ${who} had the edge.`;
+}
+
+function showStory() {
+  const story = data.story || [], p = profile(), box = $('story-text');
+  $('story-section').hidden = story.length === 0;
+  const text = story.map(c => `Planted: ${c.note} The Analyst ${c.recovered ? 'found it' : 'did not find it'}: ${c.found}.`).join(' ');
+  box.textContent = p === 'deafblind' ? wrapText(text, 40) : text;
+  box.style.whiteSpace = p === 'deafblind' ? 'pre-line' : '';
+  box.style.fontFamily = p === 'deafblind' ? 'ui-monospace, Consolas, monospace' : '';
+}
+
+function wrapText(text, width) {
+  const lines = []; let line = '';
+  for (const word of text.split(/\s+/)) {
+    if (line && (line + ' ' + word).length > width) { lines.push(line); line = word; }
+    else line = line ? line + ' ' + word : word;
+  }
+  if (line) lines.push(line);
+  return lines.join('\n');
+}
+
+// Every profile gets the analysis, in the form that suits it: chart + summary + table for
+// standard and deaf; summary + table for blind (the chart is visual only); the summary alone,
+// wrapped to 40 cells, for deafblind.
+function showAnalytics() {
+  const p = profile(), summary = $('mom-summary');
+  $('mom-visual').hidden = !['standard', 'deaf'].includes(p);
+  $('mom-table').hidden = p === 'deafblind';
+  summary.textContent = p === 'deafblind' ? wrapText(summaryText, 40) : summaryText;
+  summary.style.whiteSpace = p === 'deafblind' ? 'pre-line' : '';
+  summary.style.fontFamily = p === 'deafblind' ? 'ui-monospace, Consolas, monospace' : '';
 }
 
 async function load() {
   $('status').textContent = 'Loading…';
   try {
-    const r = await fetch(`/api/recap?seed=${$('seed').value}&language=${$('lang').value}`);
+    const depth = document.querySelector('input[name="depth"]:checked').value;
+    const r = await fetch(`/api/recap?seed=${$('seed').value}&language=${$('lang').value}&depth=${depth}&archetype=${$('story').value}&fault=${$('fault').value}`);
+    if (r.status === 429) throw new Error(`too many requests, please try again in ${r.headers.get('Retry-After') || 'a few'} seconds`);
     if (!r.ok) throw new Error(r.statusText);
+    offline = r.headers.get('X-Pitchside-Mode') === 'offline-budget';
+    if (rpTimer) { clearInterval(rpTimer); rpTimer = null; }
+    replay = null; $('rp-controls').hidden = true; $('rp-toggle').hidden = true; $('rp-clock').textContent = '';
     data = await r.json(); render();
   } catch (e) { $('status').textContent = 'Could not load the recap: ' + e.message; }
 }
@@ -227,18 +318,83 @@ function announce(item, li) {
 
 function play() {
   if (!data) return;
-  if (timer) { clearInterval(timer); timer = null; $('play').textContent = 'Play match live'; return; }
+  if (timer) { clearInterval(timer); timer = null; $('play').textContent = 'Step through this recap'; return; }
   const items = data.recaps[profile()].items, nodes = $('items').children;
   let i = 0; $('play').textContent = 'Stop';
   timer = setInterval(() => {
-    if (i >= items.length) { clearInterval(timer); timer = null; $('play').textContent = 'Play match live'; return; }
+    if (i >= items.length) { clearInterval(timer); timer = null; $('play').textContent = 'Step through this recap'; return; }
     announce(items[i], nodes[i]); i++;
   }, 3500);
 }
 
+function rpStop() {
+  if (rpTimer) { clearInterval(rpTimer); rpTimer = null; }
+  if ($('rp-toggle').textContent !== 'Play again') $('rp-toggle').textContent = 'Resume';
+}
+
+function showFrame(i, announceNew) {
+  rpIdx = i; data = replay.frames[i]; offline = false; render();
+  const label = `Minute ${replay.minutes[i]} of 90: ${data.match.home} ${data.analysis.final_score.split('-')[0]}, ${data.match.away} ${data.analysis.final_score.split('-')[1]}`;
+  const scrub = $('rp-scrub'); scrub.value = i; scrub.setAttribute('aria-valuetext', label);
+  $('rp-clock').textContent = label;
+  const items = data.recaps[profile()].items, texts = new Set(items.map(it => it.text));
+  if (announceNew) {
+    const fresh = items.map((it, k) => [it, k]).filter(([it]) => !prevTexts.has(it.text));
+    if (fresh.length) {
+      const [item, k] = fresh[fresh.length - 1];
+      announce(item, $('items').children[k]);
+      $('live').textContent = fresh.map(([it]) => it.text).join(' ');
+    }
+  }
+  prevTexts = texts;
+}
+
+function rpTick() {
+  showFrame(rpIdx + 1, true);
+  if (rpIdx >= replay.frames.length - 1) {
+    clearInterval(rpTimer); rpTimer = null; $('rp-toggle').textContent = 'Play again';
+  }
+}
+
+function rpPlay() {
+  if (rpTimer) clearInterval(rpTimer);
+  $('rp-toggle').textContent = 'Pause';
+  rpTimer = setInterval(rpTick, 3500);
+}
+
+async function startReplay(at) {
+  if (timer) { clearInterval(timer); timer = null; $('play').textContent = 'Step through this recap'; }
+  if (rpTimer) { clearInterval(rpTimer); rpTimer = null; }
+  $('rp-clock').textContent = 'Preparing the simulated match…';
+  try {
+    const depth = document.querySelector('input[name="depth"]:checked').value;
+    const r = await fetch(`/api/replay?seed=${$('seed').value}&depth=${depth}&archetype=${$('story').value}`);
+    if (r.status === 429) throw new Error(`too many requests, please try again in ${r.headers.get('Retry-After') || 'a few'} seconds`);
+    if (!r.ok) throw new Error(r.statusText);
+    replay = await r.json();
+  } catch (e) { replay = null; $('rp-clock').textContent = 'Could not start the simulated match: ' + e.message; return; }
+  $('rp-scrub').max = replay.frames.length - 1;
+  $('rp-controls').hidden = false; $('rp-toggle').hidden = false;
+  prevTexts = new Set();
+  showFrame(at || 0, false);
+  if (at === undefined) rpPlay(); else $('rp-toggle').textContent = 'Resume';
+}
+
+function refresh() { if (replay) startReplay(rpIdx); else load(); }
+
+$('rp-start').addEventListener('click', () => startReplay());
+$('rp-toggle').addEventListener('click', () => {
+  if (rpTimer) { rpStop(); return; }
+  if ($('rp-toggle').textContent === 'Play again' || rpIdx >= replay.frames.length - 1) showFrame(0, false);
+  rpPlay();
+});
+$('rp-scrub').addEventListener('input', (e) => { rpStop(); showFrame(Number(e.target.value), false); });
 $('load').addEventListener('click', load);
 $('play').addEventListener('click', play);
 document.querySelectorAll('input[name="profile"]').forEach(r => r.addEventListener('change', render));
+$('story').addEventListener('change', () => { if (data) refresh(); });
+$('fault').addEventListener('change', () => { if (data && !replay) load(); });
+document.querySelectorAll('input[name="depth"]').forEach(r => r.addEventListener('change', () => { if (data) refresh(); }));
 $('contrast').addEventListener('click', (e) => {
   const on = document.body.classList.toggle('contrast'); e.target.setAttribute('aria-pressed', on);
 });

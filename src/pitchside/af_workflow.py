@@ -33,11 +33,12 @@ from .agents.narrator import (
 )
 from .agents.translator import Translator
 from .llm import LLMClient
-from .models import Match, Narrative
+from .models import Depth, Match, Narrative
 from .pipeline_steps import (
     PipelineResult,
     RunState,
     build_result,
+    maybe_inject_fault,
     record_narration_failure,
     span,
     start_attempt,
@@ -75,11 +76,17 @@ class AgentNarrator:
         return self._agent
 
     async def narrate(
-        self, match: Match, analysis: Any, feedback: list[str] | None = None
+        self,
+        match: Match,
+        analysis: Any,
+        feedback: list[str] | None = None,
+        depth: Depth = Depth.CASUAL,
     ) -> Narrative:
         if not self.available:
-            return template_narrative(match, analysis)
-        result = await self._get_agent().run(build_user_prompt(match, analysis, feedback))
+            return template_narrative(match, analysis, depth)
+        result = await self._get_agent().run(
+            build_user_prompt(match, analysis, feedback, depth)
+        )
         text = getattr(result, "text", None) or str(result)
         return parse_narrative(extract_json(text), source="llm")
 
@@ -114,10 +121,11 @@ def build_workflow(narrator: Any, translator: Translator, max_attempts: int = 3)
             try:
                 with span(state.trace, "narrator", action):
                     state.draft = await narrator.narrate(
-                        state.match, state.analysis, state.feedback or None
+                        state.match, state.analysis, state.feedback or None, state.depth
                     )
             except Exception as exc:  # noqa: BLE001  model outage, bad JSON: recover, don't crash
                 record_narration_failure(state, exc)
+            maybe_inject_fault(state)
             await ctx.send_message(state)
 
         return narrate
@@ -179,12 +187,20 @@ class AgentFrameworkOrchestrator:
         seed: int = 7,
         profiles: list[Profile] | None = None,
         language: str = "en",
+        depth: Depth = Depth.CASUAL,
+        archetype: str | None = None,
+        up_to_minute: int | None = None,
+        fault: str | None = None,
     ) -> PipelineResult:
         workflow = build_workflow(self.narrator, self.translator, self.max_attempts)
         state = RunState(
             seed=seed,
             profiles=profiles or list(Profile),
             language=language,
+            depth=Depth(depth),
+            archetype=archetype,
+            up_to_minute=up_to_minute,
+            fault=fault,
             max_attempts=self.max_attempts,
         )
         events = await workflow.run(state)
@@ -198,6 +214,10 @@ class AgentFrameworkOrchestrator:
         seed: int = 7,
         profiles: list[Profile] | None = None,
         language: str = "en",
+        depth: Depth = Depth.CASUAL,
+        archetype: str | None = None,
+        up_to_minute: int | None = None,
+        fault: str | None = None,
     ) -> PipelineResult:
         """Synchronous wrapper (call from a thread with no running event loop)."""
-        return asyncio.run(self.arun(seed, profiles, language))
+        return asyncio.run(self.arun(seed, profiles, language, depth, archetype, up_to_minute, fault))
