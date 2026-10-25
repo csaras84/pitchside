@@ -22,7 +22,7 @@ no third-party trademarks, no copyrighted music. Say only what is on the "safe" 
 - Record several takes of Red-card swing at analyst depth. Keep the take where the trace shows
   a rejection. The Detail column now shows the reason on screen.
 - If none appears on camera, do not claim one. Use the labelled fault-injection demo
-  (still to build) and say "injected" out loud.
+  (Verifier demo selector, built) and say "injected" out loud.
 - Never say "always" or "never wrong". Say "it checks, and rejects what it can prove wrong".
 
 ## Say only if true on the day you record
@@ -30,7 +30,7 @@ no third-party trademarks, no copyrighted music. Say only what is on the "safe" 
 - "Hosted on Azure Container Apps": only after the deploy script has run and `/health` answers.
 - "Translated with Azure AI Translator": only after the key is set. Add "machine translation, unverified".
 - "Microsoft Agent Framework": only if you demo `?engine=agent_framework` or name it in the pitch with the optional-engine wording.
-- Test count: re-read it from `pytest -q` on the day. The last confirmed figure was 58, before the story work.
+- Test count: re-read it from `pytest -q` on the day. Last confirmed on your machine: 88 passed (Oct 25, 16:58 IST).
 
 ## Do not say
 

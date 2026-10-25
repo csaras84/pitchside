@@ -28,7 +28,8 @@ if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
     throw "Azure CLI not found. Install it with: winget install -e --id Microsoft.AzureCLI"
 }
 
-$envFile = Join-Path $PSScriptRoot "..\.env"
+$root = Join-Path $PSScriptRoot ".."
+$envFile = Join-Path $root ".env"
 if (-not (Test-Path $envFile)) { throw "No .env found at $envFile" }
 
 $vars = @{}
@@ -81,7 +82,7 @@ Invoke-Az provider register --namespace Microsoft.OperationalInsights --only-sho
 Write-Host "Building and deploying (this takes a few minutes)..."
 Invoke-Az containerapp up `
     --name $Name --resource-group $ResourceGroup --location $Location `
-    --source (Join-Path $PSScriptRoot "..") `
+    --source $root `
     --ingress external --target-port 8000
 
 Write-Host "Storing secrets and settings..."

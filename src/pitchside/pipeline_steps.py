@@ -42,6 +42,7 @@ class PipelineResult(BaseModel):
     recaps: dict[str, AccessibleRecap]
     language: str = "en"
     depth: str = "casual"
+    engine: str = "plain"  # which engine ran the steps: plain | agent_framework
     translated: bool = False
     story: list[StoryCheck] = Field(default_factory=list)
     trace: list[TraceEntry] = Field(default_factory=list)

@@ -194,6 +194,7 @@ def recap(
         seed=seed, profiles=chosen, language=language, depth=Depth(depth),
         archetype=archetype or None, fault=fault or None,
     )
+    result.engine = engine
     guard.cache.put(key, result)
     response.headers["X-Pitchside-Cache"] = "miss"
     return result

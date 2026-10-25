@@ -36,6 +36,7 @@
   .bar { display: inline-block; height: .9em; background: var(--accent); vertical-align: middle; }
   .ok { color: var(--ok); } .bad { color: var(--bad); }
   [hidden] { display: none !important; }
+  .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
   .mom { margin: .5rem 0; }
   .mom-row { display: grid; grid-template-columns: 1fr 5rem 1fr; align-items: center; gap: .5rem; padding: .2rem 0; }
   .mom-head { font-weight: 600; border-bottom: 2px solid var(--border); }
@@ -95,6 +96,20 @@
       </select>
     </p>
     <p>
+      <label for="engine">Engine</label>
+      <select id="engine">
+        <option value="plain">Plain Python</option>
+        <option value="agent_framework">Microsoft Agent Framework workflow</option>
+      </select>
+      <label for="fault">Verifier demo</label>
+      <select id="fault" aria-describedby="fault-help">
+        <option value="">Off</option>
+        <option value="wrong_minute">Inject a wrong minute into draft 1</option>
+        <option value="wrong_score">Inject a wrong score into draft 1</option>
+      </select>
+    </p>
+    <p id="fault-help" class="sub">For demonstration only: the first draft is deliberately corrupted so you can watch the Verifier reject it and the retry pass. The trace says so.</p>
+    <p>
       <button id="load" class="primary">Load recap</button>
       <button id="play" disabled>Step through this recap</button>
       <button id="contrast" aria-pressed="false">High contrast</button>
@@ -126,7 +141,7 @@
     <h2 id="tl-h">Match timeline</h2>
     <p class="sub" id="notes"></p>
     <ol id="items" aria-label="Match events"></ol>
-    <div id="live" aria-live="polite" class="sub"></div>
+    <div id="live" aria-live="polite" class="sr-only"></div>
   </section>
 
   <section id="mom-section" aria-labelledby="mom-h">
@@ -155,7 +170,7 @@
     <p id="story-text"></p>
   </section>
 
-  <details>
+  <details id="trace-details">
     <summary>How was this verified? (agent trace)</summary>
     <p id="verdict"></p>
     <table>
@@ -183,6 +198,7 @@ function render() {
   const part = data.match.clock < 90;
   $('score').textContent = `${part ? `After ${data.match.clock} minutes: ` : ''}${data.match.home} ${h}, ${data.match.away} ${a}`;
   const notes = [];
+  if (data.trace.some(t => t.agent === 'demo' && t.status === 'injected')) notes.push('Verifier demo: a fault was injected into the first draft on purpose. The agent trace below shows it being caught.');
   if (part) notes.push(`Simulated live feed: this is the match after ${data.match.clock} minutes. Nothing later is known yet.`);
   if (data.language !== 'en' && !data.translated) notes.push('Translation is unavailable right now: showing English.');
   if (offline) notes.push('This demo\'s cloud budget for the hour is used up, so this recap was written by the built-in template agents.');
@@ -201,8 +217,9 @@ function render() {
   showAnalytics();
   showStory();
   $('verdict').textContent = data.verification.passed
-    ? `Verified: ${data.verification.checked} statements checked against the raw event data, 0 issues. Narrator source: ${data.narrative.source}. Detail level: ${data.depth}.`
+    ? `Verified: ${data.verification.checked} statements checked against the raw event data, 0 issues. Narrator source: ${data.narrative.source}. Detail level: ${data.depth}. Engine: ${data.engine === 'agent_framework' ? 'Microsoft Agent Framework workflow' : 'plain Python'}.`
     : 'Verification failed.';
+  if (data.trace.some(t => t.agent === 'demo')) $('trace-details').open = true;
   $('trace').replaceChildren(...data.trace.map(t => row([t.agent, t.action, t.status, t.ms, t.detail || ''])));
   $('play').disabled = false;
 }
@@ -268,11 +285,12 @@ async function load() {
   $('status').textContent = 'Loading…';
   try {
     const depth = document.querySelector('input[name="depth"]:checked').value;
-    const r = await fetch(`/api/recap?seed=${$('seed').value}&language=${$('lang').value}&depth=${depth}&archetype=${$('story').value}`);
+    const r = await fetch(`/api/recap?seed=${$('seed').value}&language=${$('lang').value}&depth=${depth}&archetype=${$('story').value}&fault=${$('fault').value}&engine=${$('engine').value}`);
     if (r.status === 429) throw new Error(`too many requests, please try again in ${r.headers.get('Retry-After') || 'a few'} seconds`);
     if (!r.ok) throw new Error(r.statusText);
     offline = r.headers.get('X-Pitchside-Mode') === 'offline-budget';
     if (rpTimer) { clearInterval(rpTimer); rpTimer = null; }
+    $('live').textContent = '';
     replay = null; $('rp-controls').hidden = true; $('rp-toggle').hidden = true; $('rp-clock').textContent = '';
     data = await r.json(); render();
   } catch (e) { $('status').textContent = 'Could not load the recap: ' + e.message; }
@@ -382,6 +400,8 @@ $('load').addEventListener('click', load);
 $('play').addEventListener('click', play);
 document.querySelectorAll('input[name="profile"]').forEach(r => r.addEventListener('change', render));
 $('story').addEventListener('change', () => { if (data) refresh(); });
+$('fault').addEventListener('change', () => { if (data && !replay) load(); });
+$('engine').addEventListener('change', () => { if (data && !replay) load(); });
 document.querySelectorAll('input[name="depth"]').forEach(r => r.addEventListener('change', () => { if (data) refresh(); }));
 $('contrast').addEventListener('click', (e) => {
   const on = document.body.classList.toggle('contrast'); e.target.setAttribute('aria-pressed', on);

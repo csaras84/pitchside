@@ -14,6 +14,7 @@ def test_api_health_and_recap():
     body = r.json()
     assert set(body["recaps"]) == {"deaf", "blind"}
     assert body["verification"]["passed"] is True
+    assert body["engine"] == "plain"
 
 
 def test_api_validates_input():
@@ -37,6 +38,7 @@ def test_agent_framework_engine_is_opt_in():
     assert r.status_code == (200 if installed else 501)
     if installed:
         assert r.json()["verification"]["passed"] is True
+        assert r.json()["engine"] == "agent_framework"
 
 
 def test_depth_and_archetype_are_validated():
