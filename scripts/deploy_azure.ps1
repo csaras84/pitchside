@@ -68,7 +68,13 @@ foreach ($key in $vars.Keys) {
 }
 
 Write-Host "Registering providers (safe to repeat)..."
-Invoke-Az extension add --name containerapp --upgrade --only-show-errors
+$have = & az extension list --query "[?name=='containerapp'].name" -o tsv
+if ($have) {
+    Write-Host "Container Apps extension already installed."
+}
+else {
+    Invoke-Az extension add --name containerapp --only-show-errors
+}
 Invoke-Az provider register --namespace Microsoft.App --only-show-errors
 Invoke-Az provider register --namespace Microsoft.OperationalInsights --only-show-errors
 

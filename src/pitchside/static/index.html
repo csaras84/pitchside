@@ -95,15 +95,6 @@
       </select>
     </p>
     <p>
-      <label for="fault">Verifier demo</label>
-      <select id="fault" aria-describedby="fault-help">
-        <option value="">Off</option>
-        <option value="wrong_minute">Inject a wrong minute into draft 1</option>
-        <option value="wrong_score">Inject a wrong score into draft 1</option>
-      </select>
-    </p>
-    <p id="fault-help" class="sub">For demonstration only: the first draft is deliberately corrupted so you can watch the Verifier reject it and the retry pass. The trace says so.</p>
-    <p>
       <button id="load" class="primary">Load recap</button>
       <button id="play" disabled>Step through this recap</button>
       <button id="contrast" aria-pressed="false">High contrast</button>
@@ -164,7 +155,7 @@
     <p id="story-text"></p>
   </section>
 
-  <details id="trace-details">
+  <details>
     <summary>How was this verified? (agent trace)</summary>
     <p id="verdict"></p>
     <table>
@@ -192,7 +183,6 @@ function render() {
   const part = data.match.clock < 90;
   $('score').textContent = `${part ? `After ${data.match.clock} minutes: ` : ''}${data.match.home} ${h}, ${data.match.away} ${a}`;
   const notes = [];
-  if (data.trace.some(t => t.agent === 'demo' && t.status === 'injected')) notes.push('Verifier demo: a fault was injected into the first draft on purpose. The agent trace below shows it being caught.');
   if (part) notes.push(`Simulated live feed: this is the match after ${data.match.clock} minutes. Nothing later is known yet.`);
   if (data.language !== 'en' && !data.translated) notes.push('Translation is unavailable right now: showing English.');
   if (offline) notes.push('This demo\'s cloud budget for the hour is used up, so this recap was written by the built-in template agents.');
@@ -213,7 +203,6 @@ function render() {
   $('verdict').textContent = data.verification.passed
     ? `Verified: ${data.verification.checked} statements checked against the raw event data, 0 issues. Narrator source: ${data.narrative.source}. Detail level: ${data.depth}.`
     : 'Verification failed.';
-  if (data.trace.some(t => t.agent === 'demo')) $('trace-details').open = true;
   $('trace').replaceChildren(...data.trace.map(t => row([t.agent, t.action, t.status, t.ms, t.detail || ''])));
   $('play').disabled = false;
 }
@@ -279,7 +268,7 @@ async function load() {
   $('status').textContent = 'Loading…';
   try {
     const depth = document.querySelector('input[name="depth"]:checked').value;
-    const r = await fetch(`/api/recap?seed=${$('seed').value}&language=${$('lang').value}&depth=${depth}&archetype=${$('story').value}&fault=${$('fault').value}`);
+    const r = await fetch(`/api/recap?seed=${$('seed').value}&language=${$('lang').value}&depth=${depth}&archetype=${$('story').value}`);
     if (r.status === 429) throw new Error(`too many requests, please try again in ${r.headers.get('Retry-After') || 'a few'} seconds`);
     if (!r.ok) throw new Error(r.statusText);
     offline = r.headers.get('X-Pitchside-Mode') === 'offline-budget';
@@ -393,7 +382,6 @@ $('load').addEventListener('click', load);
 $('play').addEventListener('click', play);
 document.querySelectorAll('input[name="profile"]').forEach(r => r.addEventListener('change', render));
 $('story').addEventListener('change', () => { if (data) refresh(); });
-$('fault').addEventListener('change', () => { if (data && !replay) load(); });
 document.querySelectorAll('input[name="depth"]').forEach(r => r.addEventListener('change', () => { if (data) refresh(); }));
 $('contrast').addEventListener('click', (e) => {
   const on = document.body.classList.toggle('contrast'); e.target.setAttribute('aria-pressed', on);
