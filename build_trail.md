@@ -150,8 +150,8 @@ user accounts.
 Done: registered; tests run on the real machine; public repo and green CI; Azure subscription and
 Foundry; real model with the Verifier loop; Microsoft Agent Framework workflow.
 
-- [ ] Run the Container Apps script and check `/health` (guardrails and script written Oct 25, not yet run)
-- [ ] Azure AI Translator resource and keys; check Tamil, Hindi, Spanish, French end to end
+- [x] Deployed to Azure Container Apps; `/health` shows model, Translator and Agent Framework all available: https://pitchside.calmforest-ffc59cc3.eastus.azurecontainerapps.io/
+- [x] Azure AI Translator resource and keys; Tamil, Hindi, Spanish, French checked (Hindi mistranslates "Goal!" as "target"; a football-terms dictionary is optional)
 - [x] Analyst "why it matters" evidence, depth setting (casual or analyst), UI selectors
 - [x] Story archetypes, red-card event, planted storylines and check (tackles, turnovers, dataset card not built)
 - [x] Simulated live feed (written Oct 25; feature freeze Mon Oct 26, 2:00 PM IST, then redeploy)
@@ -243,3 +243,11 @@ Foundry; real model with the Verifier loop; Microsoft Agent Framework workflow.
 - Verifier demo: an optional fault (wrong minute or wrong score) corrupts draft 1 and is labelled `INJECTED FAULT` in the trace. Across 4 match types, several seeds and both detail levels (over 50 combinations) the Verifier rejected every injected fault, and the accepted recap equals the clean one.
 - Result on the real machine: `ruff check .` clean and **88 tests pass** (Python 3.14.2), including the API tests. Not verified: Docker build, the deploy script, Translator, a screen reader, the Agent Framework tests in CI (the extra is not installed there).
 - Next: push, run the Azure deploy and check `/health`, create Translator, screen-reader pass, then pitch and video.
+
+### Oct 25, 19:30 to 21:35: Translator connected, first Azure deploy
+- Translator resource (East US) created; `scripts/check_translator.py` returned OK for Spanish, French, Hindi and Tamil. Quality note: Hindi rendered "Goal!" as "लक्ष्य" (target); an optional Translator dictionary could force "गोल". Spanish checked through the app; facts, scores and minutes preserved.
+- Display bug found from the pasted page: the screen-reader announcement area was visible and kept stale feed text ("After 30 minutes: ..."). Now visually hidden and cleared on load.
+- Deploy from the PC failed: `az extension add containerapp` could not install because the Azure CLI's bundled Python is a 32-bit Python 3.14 and `psutil` had to be built from source. My first diagnosis (CLI out of date) was wrong; the CLI was current (2.91.0). Workaround: deploy from Azure Cloud Shell, which has the extension. The script now skips the extension install when present and builds paths in a way that works on Linux.
+- Deployed to Azure Container Apps in East US (resource group `mshackathon-rsc`, one replica) from Cloud Shell. `/health`: status ok, `llm_configured` true, `translator_configured` true, Agent Framework installed. Public address: https://pitchside.calmforest-ffc59cc3.eastus.azurecontainerapps.io/
+- Housekeeping outstanding: delete the `.env` copied into Cloud Shell, set a budget alert, plan to delete the app after Nov 10.
+- Not yet verified on the public address: a private-window run, a phone on mobile data, screen reader, first-click speed with the cache warm-up.

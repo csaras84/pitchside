@@ -8,6 +8,8 @@ Football is experienced through sound and sight. Pitchside turns a stream of mat
 sound cues and vibration for deaf fans, spatial audio description for blind fans, and braille-ready
 text for deafblind fans, in multiple languages.
 
+**Try it:** https://pitchside.calmforest-ffc59cc3.eastus.azurecontainerapps.io/
+
 > All clubs, players and events are synthetic and fictional. No real Premier League data is used.
 
 ## How it works
@@ -141,7 +143,7 @@ API options for `/api/recap`: `seed`, `profiles`, `language`, `engine`, `depth` 
 
 ## Deploy to Azure Container Apps
 
-`scripts/deploy_azure.ps1` builds the image in Azure from the `Dockerfile`, reads your `.env`, stores
+The live demo runs this way, in Azure Container Apps (East US). `scripts/deploy_azure.ps1` builds the image in Azure from the `Dockerfile`, reads your `.env`, stores
 the API keys as Container Apps secrets and prints the public URL:
 
 ```powershell
@@ -172,7 +174,7 @@ run Accessibility Insights and try it with NVDA or VoiceOver.
 ## Hackathon checklist
 
 - [x] Public GitHub repo (required)
-- [ ] Working link for judges, free to use until Nov 10 (required)
+- [x] Working link for judges, free to use until Nov 10 (required): https://pitchside.calmforest-ffc59cc3.eastus.azurecontainerapps.io/
 - [ ] Pitch: what it does, which Microsoft/Azure tech is used, what problem it solves
 - [ ] Demo video under 2 minutes, public on YouTube/Vimeo/Facebook Video/Youku, no third-party trademarks or copyrighted music
 - [ ] Submit on the Innovation Studio Platform before **Oct 27, 2026, 11:59 PM PT**
