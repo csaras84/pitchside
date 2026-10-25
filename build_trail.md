@@ -81,7 +81,7 @@ rendering well and the other three thinly. The plan to close that, in priority o
 4. **Two independent settings**: *depth* (casual fan or tactical analyst) and *presentation*
    (standard, deaf, blind, deafblind). Any pair works, 8 experiences, one pipeline. Favourite club or
    player is a possible third setting (a filter on which moments get the most space).
-5. **Simulated live replay**: the match unfolds minute by minute and the page updates as it goes.
+5. **Simulated live feed** (first called a live replay): the match unfolds minute by minute and the page updates as it goes.
    This touches the trust core: a half-played match has no final score, so the template, the prompt
    and the Verifier's final-score rule become "score so far" with the same strictness.
 6. **Data with more character, kept honest**: three story archetypes (for example red-card swing,
@@ -92,9 +92,14 @@ rendering well and the other three thinly. The plan to close that, in priority o
    draft's score or minute once, so the trace shows a real rejection, feedback and corrected retry.
    The real model rarely errs, so the injected fault is labelled as injected.
 
-**Demo plan (under 2 minutes):** a live replay of a red-card-swing match, the same moment as a
+**Demo plan (under 2 minutes):** a simulated live feed of a red-card-swing match, the same moment as a
 casual fan and as an analyst, rendered in the four presentations, then the agent trace showing the
 Verifier rejecting an injected error and accepting the corrected draft.
+
+**Status at Oct 25, 17:00 IST:** items 3, 4, 5 and 7 are built and tested. Item 6 is partly done
+(three story archetypes, a red-card event type, planted storylines and the check); tackles,
+turnovers, match context and the dataset card are not built. Items 1 and 2 (public link, Translator)
+are written or planned but not yet run. Favourite-club setting not built.
 
 **Out of scope:** player tracking and speed or distance indicators (they would need positional data
 we do not have; roadmap only), auto-eventing from video, sign-language avatar, real broadcast data,
@@ -145,12 +150,13 @@ user accounts.
 Done: registered; tests run on the real machine; public repo and green CI; Azure subscription and
 Foundry; real model with the Verifier loop; Microsoft Agent Framework workflow.
 
-- [ ] Deploy guardrails and the Container Apps script (written Oct 25, not yet run)
+- [ ] Run the Container Apps script and check `/health` (guardrails and script written Oct 25, not yet run)
 - [ ] Azure AI Translator resource and keys; check Tamil, Hindi, Spanish, French end to end
-- [ ] Analyst "why it matters" evidence, depth setting (casual or analyst), UI selectors
-- [ ] Story archetypes, new event types, planted storylines, dataset card
-- [ ] Simulated live replay (hard cutoff Mon Oct 26, 2:00 PM IST), then feature freeze and redeploy
-- [ ] Fault-injection demo of the Verifier
+- [x] Analyst "why it matters" evidence, depth setting (casual or analyst), UI selectors
+- [x] Story archetypes, red-card event, planted storylines and check (tackles, turnovers, dataset card not built)
+- [x] Simulated live feed (written Oct 25; feature freeze Mon Oct 26, 2:00 PM IST, then redeploy)
+- [x] Fault-injection demo of the Verifier
+- [ ] Update the demo video notes and pitch with the final feature names
 - [ ] Screen-reader pass (NVDA or VoiceOver) and Accessibility Insights; fix issues
 - [ ] Azure AI Speech audio (first thing to cut if behind)
 - [ ] Pitch text, demo video (under 2 min, strictly), recorded Oct 27
@@ -222,3 +228,18 @@ Foundry; real model with the Verifier loop; Microsoft Agent Framework workflow.
 - Added `Dockerfile` (tries the Agent Framework extra and says so if it falls back), `.dockerignore` (keeps `.env` out), `scripts/deploy_azure.ps1` (reads `.env`, stores the two keys as Container Apps secrets, one replica so the in-memory counters stay correct) and the guard settings in `.env.example`.
 - Verified in the build sandbox: lint clean on the new files; the 4 guard unit tests pass. **Not verified:** the 2 API-level guard tests (FastAPI cannot be installed there), the Docker build, the deploy script, and the full suite on the real machine (expected 36 tests).
 
+### Oct 25, afternoon: "why it matters", depth, story archetypes
+- The Analyst now computes reasons in plain code (score state, momentum shift before and after a goal or red card, chance quality, late goal, against the run of play, first booking, sent off, wasted dominance). The Verifier checks each reason against recomputed evidence, the wording, and, at analyst depth, that the figures appear in the text. Detail level (casual or analyst) is independent of presentation: 8 experiences.
+- Trivial reasons were removed: "a goal would put X ahead" in minute 1, or "best chance so far" early on, are gated by minute thresholds.
+- Story archetypes (red-card swing, late comeback, dominant but wasteful) with planted storylines. First measurement of the Analyst finding them was 30 of 40, 40 of 40 and 22 of 40. Diagnosis: the generator did not always make the premise true (the xG gap under 1.0; the other side already on top before the red card). After making the premise hold, 60 of 60 for each, with a negative control (against an unrelated match's analysis) under 10 percent. Caveat kept in the docs: the generator guarantees the premise, so this is not a general accuracy figure.
+- Real model, analyst depth, Red-card swing story: draft #1 rejected by the Verifier, draft #2 accepted, 7 statements checked, about 8.8 s and 8.4 s per Foundry call. The recap text matched the data (3.5 to 3.5 before, 14.5 to 0.5 after, 10 players, 1-0 and 2-0).
+- Finding: git history showed that some edits I believed had landed in an earlier session never did. Cause not established (a lost or overwritten write is the likely explanation; my first guess, a OneDrive sync, was wrong because there is none). From then on every file write checks the file's modified time and size first.
+- Mistakes of mine recorded earlier and corrected: a wrong test count, a wrong deadline day, and saying a live link was not required.
+
+### Oct 25, 16:40 to 17:00: trace detail, warm-up, simulated live feed, Verifier demo
+- The agent trace now has a Detail column, so the reason for each rejection is on screen.
+- Start-up cache warm-up (`PITCHSIDE_WARM_CACHE=1`, on in the Docker image) pre-computes the eight demo recaps, because one model recap took about 17 s (two drafts at about 8.5 s each).
+- Simulated live feed: `/api/replay` returns verified checkpoint frames (every 10 minutes, plus after each goal and red card, and full time), each built only from events up to that minute and written by the offline agents, so playing costs no model tokens. Tests check that no frame mentions a later minute, that scores only grow, that the last frame equals the full recap, and that the storyline is judged at full time only. First called "live replay"; renamed "simulated live feed" because nothing is live and it is not a replay of a real match.
+- Verifier demo: an optional fault (wrong minute or wrong score) corrupts draft 1 and is labelled `INJECTED FAULT` in the trace. Across 4 match types, several seeds and both detail levels (over 50 combinations) the Verifier rejected every injected fault, and the accepted recap equals the clean one.
+- Result on the real machine: `ruff check .` clean and **88 tests pass** (Python 3.14.2), including the API tests. Not verified: Docker build, the deploy script, Translator, a screen reader, the Agent Framework tests in CI (the extra is not installed there).
+- Next: push, run the Azure deploy and check `/health`, create Translator, screen-reader pass, then pitch and video.

@@ -27,9 +27,9 @@ flowchart LR
 
 | Agent | Role | Technology |
 |---|---|---|
-| Analyst | Score, xG, momentum windows, key moments (deterministic, so numbers never come from an LLM) | Python |
+| Analyst | Score, xG, momentum windows, key moments, and the evidence for why each moment matters (deterministic, so numbers never come from an LLM) | Python |
 | Narrator | Writes the recap; every sentence carries structured `claims` | Microsoft Foundry deployment (`gpt-4.1-mini`), run as a Microsoft Agent Framework `Agent` in the workflow engine |
-| Verifier | Checks each claim (minute, player, team, score) against raw events; rejects and returns issues | Python |
+| Verifier | Checks each claim (minute, player, team, score) and each stated reason against raw events and recomputed evidence; rejects and returns issues | Python |
 | Accessibility Adapter | Renders one verified story per profile: sound cues, plain language, spatial description, haptics, SSML, 40-cell braille text | Python, Azure AI Speech SSML |
 | Translator | English, Spanish, French, Hindi, Tamil | Azure AI Translator |
 | Orchestrator | Shared state, handoffs, retry with feedback, fallback, per-step trace | Plain Python, or a Microsoft Agent Framework workflow (see below) |
@@ -37,6 +37,54 @@ flowchart LR
 **Failure recovery:** if the LLM returns bad JSON, is down, or states something the Verifier rejects,
 the Narrator is retried with the Verifier's issues. After `max_attempts` the deterministic narrator
 takes over, so a recap is always produced and always verified. Every step is traced and shown in the UI.
+
+## Two settings, eight experiences
+
+Detail level and presentation are independent, so any pair works and every one comes from the same
+verified story:
+
+| Setting | Options |
+|---|---|
+| Detail | **Casual fan** (the short reason a moment matters) or **Tactical analyst** (every reason, with the numbers) |
+| Presentation | Standard, deaf or hard of hearing, blind or low vision, deafblind |
+
+"Why it matters" is computed by the Analyst, never by the model: for example "Harbour United are down
+to 10 players. Northgate FC took control afterwards: attacking threat 14.5 to 0.5 over the next 15
+minutes, against 3.5 to 3.5 before." The Narrator only phrases those reasons. The Verifier checks that
+each reason exists in the recomputed analysis, that the evidence figures match, that the wording agrees
+with the score state ("takes the lead", "levels the score", and so on), and, at analyst depth, that the
+numbers appear in the text.
+
+## Story matches and a check on the Analyst
+
+The generator can write a match around a storyline: a **red-card swing**, a **late comeback**, or a
+**dominant but wasteful** side. The storyline is recorded privately as ground truth. The agents never
+see it; `storycheck.py` measures whether the Analyst recovers it from the raw events alone, and the
+page shows the result.
+
+On 60 seeds per story the Analyst recovered the planted storyline every time, and against the analysis
+of an unrelated match the check says "not found" at least 90 percent of the time (the negative control).
+**Read this carefully:** the generator guarantees each story's premise is true in the events (for
+example, that the side with ten men really is out-attacked afterwards), so this measures the Analyst
+against known stories. It is not a general accuracy figure.
+
+## Simulated live feed
+
+A finished synthetic match can be played back minute by minute (`/api/replay`, or "Start simulated
+match" in the page). Each step is a full recap built from only the events up to that minute, written
+by the built-in agents (no model tokens, English only) and verified like any other. A half-played
+match has no final score, so those recaps say "After 40 minutes: ..." and the Verifier enforces that
+form. The storyline check is shown at full time only. This is a simulation of a live feed, not a
+connection to one.
+
+## Verifier demo
+
+The real model rarely makes a mistake on demand, so the page has a "Verifier demo" selector. It
+deliberately corrupts the first draft (a wrong minute or a wrong score), and the agent trace labels it
+`INJECTED FAULT (demo, not a model mistake)`. The Verifier is not told; it rejects the draft by
+comparing it with the raw events, the Narrator is retried with the reasons, and the corrected draft
+passes. The corrupted draft never reaches the reader. The trace also shows the reason for every real
+rejection.
 
 **Offline by default:** with no credentials the whole app runs on deterministic template agents.
 Set the variables in `.env.example` to switch on Foundry and Translator.
@@ -87,6 +135,10 @@ python scripts/try_agent_framework.py    # workflow engine with the real model
 
 Try the workflow engine through the API: `/api/recap?engine=agent_framework`.
 
+API options for `/api/recap`: `seed`, `profiles`, `language`, `engine`, `depth` (`casual` or
+`analyst`), `archetype` (`red_card_swing`, `late_comeback`, `dominant_wasteful`) and `fault`
+(`wrong_minute` or `wrong_score`). `/api/replay` takes `seed`, `profiles`, `depth` and `archetype`.
+
 ## Deploy to Azure Container Apps
 
 `scripts/deploy_azure.ps1` builds the image in Azure from the `Dockerfile`, reads your `.env`, stores
@@ -101,7 +153,9 @@ az login
 from an in-memory cache; each client may make 30 uncached requests a minute; and at most 200 runs an
 hour may call Foundry or Translator. Once that budget is spent the app does not turn anyone away: it
 answers with the offline template agents (response header `X-Pitchside-Mode: offline-budget`). The
-counters live in one process, so the app runs a single replica.
+counters live in one process, so the app runs a single replica. With `PITCHSIDE_WARM_CACHE=1`
+(on in the Docker image) the app pre-computes the eight demo recaps at start-up, so a first visitor is
+served from the cache instead of waiting for the model.
 
 ## Accessibility features
 
@@ -123,20 +177,20 @@ run Accessibility Insights and try it with NVDA or VoiceOver.
 - [ ] Demo video under 2 minutes, public on YouTube/Vimeo/Facebook Video/Youku, no third-party trademarks or copyrighted music
 - [ ] Submit on the Innovation Studio Platform before **Oct 27, 2026, 11:59 PM PT**
 
-## Roadmap / known gaps
-
-In progress for the submission: "why it matters" explanations computed by the Analyst, a casual fan
-or tactical analyst setting independent of the accessibility profile, a simulated live replay of a
-match, story archetypes in the synthetic data, and a labelled fault-injection demo of the Verifier.
-
-Known gaps and limits:
+## Known gaps and roadmap
 
 - Translations are ordinary machine translation on top of the verified English text; only the English
   source is fact-checked. Without Translator keys the app falls back to English.
-- The demo plays a finished match; it is not connected to a live feed.
+- The simulated live feed replays a finished match; it is not connected to a live source, and its
+  steps are written by the template agents rather than the model.
+- The planted-storyline result measures the Analyst against stories the generator guarantees; it is
+  not a general accuracy claim.
+- The synthetic data has one new event type (red card) beyond the original set. Tackles, turnovers,
+  match context and a dataset card are not built.
 - No speed or distance metrics: the synthetic data holds event positions, not player tracking, and
   invented numbers would undermine the point of a fact-checked recap. Roadmap only.
-- Show the engine choice and each workflow step in the UI (today the engine is selected through the API)
-- Use **Azure AI Speech** for real audio (SSML is already generated; the UI currently uses browser speech)
-- Add Foundry evaluations for narration quality
-- Add a LICENSE file
+- The page has not been tested with a screen reader or a braille display, so no accessibility
+  conformance is claimed.
+- Not built: a favourite-club setting, Azure AI Speech audio (SSML is generated; the page uses browser
+  speech), Foundry evaluations of narration quality, a LICENSE file, and showing the engine choice and
+  each workflow step in the page.
