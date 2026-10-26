@@ -103,6 +103,17 @@ def test_spatial_and_tone_helpers():
     assert describe_position(kickoff) is None
 
 
+def test_spatial_description_names_the_team():
+    """A listener cannot see the pitch, so 'their own third' must say whose."""
+    match = generate_match(7)
+    for e in match.events:
+        phrase = describe_position(e)
+        if phrase and "third" in phrase:
+            assert f"{e.team}'s" in phrase
+        if phrase and "penalty area" in phrase:
+            assert e.team in phrase
+
+
 def _ordinal(n: int) -> str:
     suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
     return f"{n}{suffix}"

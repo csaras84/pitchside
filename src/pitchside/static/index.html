@@ -215,6 +215,7 @@ function render() {
   $('status').textContent = notes.join(' ');
   $('notes').textContent = recap.notes.join(' ');
   const list = $('items'); list.replaceChildren();
+  list.lang = data.translated ? data.language : 'en';   // so a screen reader switches voice for the translated text
   recap.items.forEach((item, i) => {
     const li = document.createElement('li');
     li.dataset.index = i;

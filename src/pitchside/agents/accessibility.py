@@ -87,9 +87,12 @@ def describe_position(e: Event) -> str | None:
     if e.x >= 84.3 and 20.2 <= e.y <= 79.8:  # penalty area is ~16.5m deep, ~40m wide
         lane = "central" if 40 <= e.y <= 60 else ("left of centre" if e.y < 40 else "right of centre")
         depth = "close to goal" if e.x >= 92 else "towards the edge of the box"
-        return f"inside the penalty area, {lane}, {depth}"
-    third = "in their own third" if e.x < 33 else ("in midfield" if e.x < 67 else "in the attacking third")
-    lane = "down the left" if e.y < 33 else ("down the right" if e.y > 67 else "through the middle")
+        return f"inside the penalty area {e.team} are attacking, {lane}, {depth}"
+    third = (
+        f"in {e.team}'s own third" if e.x < 33
+        else ("in midfield" if e.x < 67 else f"in {e.team}'s attacking third")
+    )
+    lane = "down their left" if e.y < 33 else ("down their right" if e.y > 67 else "through the middle")
     return f"{third}, {lane}"
 
 
