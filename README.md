@@ -169,7 +169,9 @@ served from the cache instead of waiting for the model.
 | Everyone | Skip link, keyboard navigation, high-contrast mode, larger text, tables with real headers |
 
 The UI is built to follow WCAG practices, but **do not claim conformance until you have tested it**:
-run Accessibility Insights and try it with NVDA or VoiceOver.
+run Accessibility Insights and try it with NVDA or VoiceOver. `scripts/a11y_audit.py` runs automated
+checks (structure, labels, tab order, focus, contrast in both themes, reflow at 320px) against a running
+Pitchside; it passes, but it is not a substitute for a person using a screen reader.
 
 ## Hackathon checklist
 
@@ -191,8 +193,8 @@ run Accessibility Insights and try it with NVDA or VoiceOver.
   match context and a dataset card are not built.
 - No speed or distance metrics: the synthetic data holds event positions, not player tracking, and
   invented numbers would undermine the point of a fact-checked recap. Roadmap only.
-- The page has not been tested with a screen reader or a braille display, so no accessibility
-  conformance is claimed.
+- The page passes automated accessibility checks but has not been tested with a screen reader or a
+  braille display, so no accessibility conformance is claimed.
 - Not built: a favourite-club setting, Azure AI Speech audio (SSML is generated; the page uses browser
   speech), Foundry evaluations of narration quality, a LICENSE file, and showing the engine choice and
   each workflow step in the page.
