@@ -57,23 +57,24 @@ class AgentNarrator:
 
     def __init__(self, llm: LLMClient | None = None) -> None:
         self.llm = llm or LLMClient()
-        self._agent: Any = None
 
     @property
     def available(self) -> bool:
         return self.llm.available
 
     def _get_agent(self) -> Any:
-        if self._agent is None:
-            from agent_framework.openai import OpenAIChatCompletionClient
+        # Built fresh for every call, never cached. Each request runs in its own event loop
+        # (asyncio.run), and the framework client holds an async HTTP connection pool that is
+        # tied to the loop it was first used in. A cached client fails on the next request with
+        # "Event loop is closed". Creating the client is cheap.
+        from agent_framework.openai import OpenAIChatCompletionClient
 
-            settings = {"api_key": self.llm.api_key, "base_url": self.llm.base_url}
-            try:
-                client = OpenAIChatCompletionClient(model=self.llm.deployment, **settings)
-            except TypeError:  # older releases named this argument model_id
-                client = OpenAIChatCompletionClient(model_id=self.llm.deployment, **settings)
-            self._agent = client.as_agent(instructions=SYSTEM_PROMPT, name="narrator")
-        return self._agent
+        settings = {"api_key": self.llm.api_key, "base_url": self.llm.base_url}
+        try:
+            client = OpenAIChatCompletionClient(model=self.llm.deployment, **settings)
+        except TypeError:  # older releases named this argument model_id
+            client = OpenAIChatCompletionClient(model_id=self.llm.deployment, **settings)
+        return client.as_agent(instructions=SYSTEM_PROMPT, name="narrator")
 
     async def narrate(
         self,
