@@ -271,3 +271,13 @@ Foundry; real model with the Verifier loop; Microsoft Agent Framework workflow.
 - Known and left as is: only the recap timeline is translated. Page labels, the momentum summary and notes stay English by design.
 - Tested by one person on one screen reader. Not done: VoiceOver, a braille display, Accessibility Insights. No conformance is claimed.
 - Deployed again after these fixes (89 tests, ruff clean).
+
+### Oct 27: Agent Framework bug, pitch and video
+- Found by the author reading the agent trace on the Agent Framework engine: the Narrator's second draft failed with "Event loop is closed" and the deterministic narrator took over. That is the safety net working, but the cause was mine. The framework client was built once and kept, while each request runs in its own event loop (`asyncio.run`); the client's async connection pool belongs to the loop it was first used in, so a later request could fail. Fixed in `af_workflow.py` by building the Narrator's client for every call instead of caching it. The sandbox has no Agent Framework installed, so the fix was checked by the author's own runs (repeated calls to `/api/recap?engine=agent_framework`, and the Verifier demo on that engine) after redeploying, not by an automated test.
+- A real model mistake was also seen and caught: at analyst depth the Narrator's first draft left out two figures and a reason for the 31st-minute booking, the Verifier rejected it with those three reasons, and the retry passed. This is separate from the injected demo fault, which is labelled in the trace.
+- Clarified in the README and pitch wording: both engines use the same Foundry model for the Narrator; they differ in how the steps are coordinated. The simulated feed and the offline fallback use the template agents, with no model.
+- Pitch (`pitch.md`, kept out of git): added a short opening on why the project was built, by the author, who is deaf. The video script's opening line was changed to match. Accessibility limits now say a first NVDA pass was done and VoiceOver and a braille display were not tested.
+- Video recorded with Clipchamp (screen and voice, the author's own voice, no music), uploaded to YouTube as Public with a description linking the live app and the repository, and checked in a private window: https://youtu.be/szCEB5dkeEk
+- Known and left as is: only the recap timeline is translated; the Agent Framework dependency pulls in many unused connectors, which makes the image build slow (a smaller dependency set is a possible later change).
+- Remaining: confirm the pitch text and links in the submission form, submit, and later delete the app, environment and registry after Nov 10.
+
