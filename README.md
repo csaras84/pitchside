@@ -3,12 +3,13 @@
 **Multi-agent, accessible match intelligence from synthetic football event data.**
 Built for *Inside the Game: Developer Hackathon* (Microsoft x Premier League).
 
-Football is experienced through sound and sight. Pitchside turns a stream of match events into a
+I am deaf, and I love football, but most of it is delivered through sound and sight. Pitchside turns a stream of match events into a
 **fact-checked** story, then re-renders that story for how each fan follows the game: captions with
 sound cues and vibration for deaf fans, spatial audio description for blind fans, and braille-ready
 text for deafblind fans, in multiple languages.
 
-**Try it:** https://pitchside.calmforest-ffc59cc3.eastus.azurecontainerapps.io/
+**Try it:** https://pitchside.calmforest-ffc59cc3.eastus.azurecontainerapps.io/  
+**Demo video (under 2 minutes):** https://youtu.be/szCEB5dkeEk
 
 > All clubs, players and events are synthetic and fictional. No real Premier League data is used.
 
@@ -148,7 +149,7 @@ the API keys as Container Apps secrets and prints the public URL:
 
 ```powershell
 az login
-.\scripts\deploy_azure.ps1 -ResourceGroup pitchside-rg -Location centralindia
+.\scripts\deploy_azure.ps1 -ResourceGroup <your-resource-group> -Location eastus
 ```
 
 **Public-demo guardrails** (`guard.py`, tunable in `.env.example`): repeated requests are answered
@@ -177,8 +178,8 @@ Pitchside; it passes, but it is not a substitute for a person using a screen rea
 
 - [x] Public GitHub repo (required)
 - [x] Working link for judges, free to use until Nov 10 (required): https://pitchside.calmforest-ffc59cc3.eastus.azurecontainerapps.io/
-- [ ] Pitch: what it does, which Microsoft/Azure tech is used, what problem it solves
-- [ ] Demo video under 2 minutes, public on YouTube/Vimeo/Facebook Video/Youku, no third-party trademarks or copyrighted music
+- [x] Pitch: what it does, which Microsoft/Azure tech is used, what problem it solves
+- [x] Demo video under 2 minutes, public on YouTube, no third-party trademarks or copyrighted music: https://youtu.be/szCEB5dkeEk
 - [ ] Submit on the Innovation Studio Platform before **Oct 27, 2026, 11:59 PM PT**
 
 ## Known gaps and roadmap
